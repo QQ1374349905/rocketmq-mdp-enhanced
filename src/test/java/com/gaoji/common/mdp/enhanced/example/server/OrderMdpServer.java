@@ -21,38 +21,55 @@ public class OrderMdpServer {
     private static final Logger logger = LoggerFactory.getLogger(OrderMdpServer.class);
 
     /**
-     * 消息处理方法
-     * 方法名必须是 onMessage
-     *
-     * 框架会自动:
-     * 1. 反序列化消息
-     * 2. 支持灵活参数转换（不同包名的同名类自动转换）
-     * 3. 调用此方法处理消息
+     * 同步发送订单消息处理方法
+     * 方法名必须与客户端接口方法名一致
      */
-    public void onMessage(OrderInfo order) {
-        logger.info("收到订单消息: {}", order);
-
-        try {
-            // 处理订单业务逻辑
-            processOrder(order);
-            logger.info("订单处理成功: orderId={}", order.getOrderId());
-        } catch (Exception e) {
-            logger.error("订单处理失败: orderId={}", order.getOrderId(), e);
-            throw new RuntimeException("订单处理失败", e);
-        }
+    public void sendOrder(OrderInfo order) {
+        logger.info("收到同步订单消息: {}", order);
+        processOrder(order, "同步消息");
     }
 
-    private void processOrder(OrderInfo order) {
-        // 模拟业务处理
-        logger.info("开始处理订单: orderId={}, userId={}, amount={}",
-            order.getOrderId(), order.getUserId(), order.getAmount());
+    /**
+     * 异步发送订单消息处理方法
+     */
+    public void sendOrderAsync(OrderInfo order) {
+        logger.info("收到异步订单消息: {}", order);
+        processOrder(order, "异步消息");
+    }
 
-        // 这里可以添加实际的业务逻辑:
-        // - 库存扣减
-        // - 支付处理
-        // - 发送通知
-        // 等等...
+    /**
+     * 延迟订单消息处理方法
+     */
+    public void sendOrderDelayed(OrderInfo order) {
+        logger.info("收到延迟订单消息: {}", order);
+        processOrder(order, "延迟消息");
+    }
 
-        order.setStatus("PROCESSED");
+    /**
+     * VIP订单消息处理方法
+     */
+    public void sendVipOrder(OrderInfo order) {
+        logger.info("收到VIP订单消息: {}", order);
+        processOrder(order, "VIP消息");
+    }
+
+    private void processOrder(OrderInfo order, String messageType) {
+        try {
+            logger.info("开始处理订单 [{}]: orderId={}, userId={}, productName={}, amount={}",
+                messageType, order.getOrderId(), order.getUserId(),
+                order.getProductName(), order.getAmount());
+
+            // 模拟业务处理
+            // - 库存扣减
+            // - 支付处理
+            // - 发送通知
+            // 等等...
+
+            order.setStatus("PROCESSED");
+            logger.info("订单处理成功 [{}]: orderId={}", messageType, order.getOrderId());
+        } catch (Exception e) {
+            logger.error("订单处理失败 [{}]: orderId={}", messageType, order.getOrderId(), e);
+            throw new RuntimeException("订单处理失败", e);
+        }
     }
 }
