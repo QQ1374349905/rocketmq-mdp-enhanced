@@ -15,12 +15,7 @@ import org.springframework.stereotype.Component;
  *   - group: "order.service_consumer_group"
  */
 @Component
-@MdpServer(
-    service = "order.service",
-    maxThreads = 20,
-    messageModel = "CLUSTERING",
-    flexibleConversion = true
-)
+@MdpServer(service = "order.service")
 public class OrderMdpServer {
 
     private static final Logger logger = LoggerFactory.getLogger(OrderMdpServer.class);

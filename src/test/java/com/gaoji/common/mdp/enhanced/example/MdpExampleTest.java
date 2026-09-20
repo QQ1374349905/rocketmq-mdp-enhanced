@@ -5,14 +5,17 @@ import com.gaoji.common.mdp.enhanced.enums.DelayLevel;
 import com.gaoji.common.mdp.enhanced.example.client.OrderMdpClient;
 import com.gaoji.common.mdp.enhanced.example.domain.OrderInfo;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
 /**
  * MDP框架使用示例测试
  *
  * 演示如何使用 @MdpClient 和 @MdpServer 进行消息发送和接收
  */
+@RunWith(SpringRunner.class)
 @EnableMdp
 @SpringBootTest(classes = MdpExampleApplication.class)
 public class MdpExampleTest {

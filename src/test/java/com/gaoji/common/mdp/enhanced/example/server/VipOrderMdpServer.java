@@ -13,13 +13,7 @@ import org.springframework.stereotype.Component;
  * 可以实现消息的多重消费（不同业务逻辑处理同一条消息）
  */
 @Component
-@MdpServer(
-    service = "order.service",
-    group = "vip_order_handler_group",  // 自定义group，与OrderMdpServer不同
-    maxThreads = 10,
-    messageModel = "CLUSTERING",
-    flexibleConversion = true
-)
+@MdpServer(service = "order.service")
 public class VipOrderMdpServer {
 
     private static final Logger logger = LoggerFactory.getLogger(VipOrderMdpServer.class);
