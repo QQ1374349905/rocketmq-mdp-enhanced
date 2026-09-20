@@ -61,8 +61,9 @@ public class MdpServerClassRegister implements BeanPostProcessor, ApplicationCon
         String topic = StringUtils.hasText(annotation.topic()) ? annotation.topic() : service;
         String group = StringUtils.hasText(annotation.group()) ? annotation.group() : service + "_consumer_group";
 
-        // 将组名中的非法字符替换为下划线
-        // RocketMQ组名只允许: ^[%|a-zA-Z0-9_-]+$
+        // 规范化 topic 和 group 名称：RocketMQ 只允许 ^[%|a-zA-Z0-9_-]+$
+        // 将非法字符（如点号）替换为下划线
+        topic = topic.replaceAll("[^a-zA-Z0-9_-]", "_");
         group = group.replaceAll("[^a-zA-Z0-9_-]", "_");
 
         try {

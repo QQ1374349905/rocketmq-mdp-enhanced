@@ -44,6 +44,10 @@ public class MdpInterfaceGenerator {
 
         String service = annotation.service();
         String topic = StringUtils.hasText(annotation.topic()) ? annotation.topic() : service;
+
+        // 规范化 topic 名称：RocketMQ topic 只允许 ^[%|a-zA-Z0-9_-]+$
+        topic = normalizeTopic(topic);
+
         int sendTimeout = annotation.sendTimeout();
 
         InvocationHandler handler = new MdpProducerInvocationHandler(producer, service, topic, sendTimeout);
@@ -53,6 +57,18 @@ public class MdpInterfaceGenerator {
                 new Class<?>[]{interfaceClass},
                 handler
         );
+    }
+
+    /**
+     * 规范化 topic 名称
+     * RocketMQ topic 只允许: ^[%|a-zA-Z0-9_-]+$
+     * 将非法字符替换为下划线
+     */
+    private static String normalizeTopic(String topic) {
+        if (!StringUtils.hasText(topic)) {
+            return topic;
+        }
+        return topic.replaceAll("[^a-zA-Z0-9_-]", "_");
     }
 
     /**

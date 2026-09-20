@@ -11,11 +11,7 @@ import com.gaoji.common.mdp.enhanced.example.domain.OrderInfo;
  * 使用 @MdpClient 标注，框架会自动生成实现类
  * service 参数用于生成 topic: "order.service"
  */
-@MdpClient(
-    service = "order.service",
-    sendTimeout = 5000,
-    flexibleConversion = true
-)
+@MdpClient(service = "order.service")
 public interface OrderMdpClient {
 
     /**
