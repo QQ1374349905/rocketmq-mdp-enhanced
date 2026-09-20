@@ -9,22 +9,55 @@ import org.springframework.stereotype.Component;
 /**
  * VIP订单MDP消费者示例
  *
- * 演示如何使用不同的group消费同一个topic
- * 可以实现消息的多重消费（不同业务逻辑处理同一条消息）
+ * 使用独立的 topic 避免与普通订单消费者冲突
+ * service = "vip.order.service" 生成:
+ *   - topic: "vip_order_service"
+ *   - group: "vip_order_service_consumer_group"
  */
 @Component
-@MdpServer(service = "order.service")
+@MdpServer(service = "vip.order.service")
 public class VipOrderMdpServer {
 
     private static final Logger logger = LoggerFactory.getLogger(VipOrderMdpServer.class);
 
     /**
+     * 同步发送订单消息处理方法
+     * 方法名必须与客户端接口方法名一致
+     */
+    public void sendOrder(OrderInfo order) {
+        logger.info("[VIP消费者] 收到同步订单消息: {}", order);
+        processOrderMessage(order);
+    }
+
+    /**
+     * 异步发送订单消息处理方法
+     */
+    public void sendOrderAsync(OrderInfo order) {
+        logger.info("[VIP消费者] 收到异步订单消息: {}", order);
+        processOrderMessage(order);
+    }
+
+    /**
+     * 延迟订单消息处理方法
+     */
+    public void sendOrderDelayed(OrderInfo order) {
+        logger.info("[VIP消费者] 收到延迟订单消息: {}", order);
+        processOrderMessage(order);
+    }
+
+    /**
+     * VIP订单消息处理方法
+     */
+    public void sendVipOrder(OrderInfo order) {
+        logger.info("[VIP消费者] 收到VIP订单消息: {}", order);
+        processOrderMessage(order);
+    }
+
+    /**
      * VIP订单特殊处理
      * 这个消费者和OrderMdpServer会同时收到消息（因为group不同）
      */
-    public void onMessage(OrderInfo order) {
-        logger.info("[VIP消费者] 收到订单消息: {}", order);
-
+    private void processOrderMessage(OrderInfo order) {
         // VIP订单的特殊处理逻辑
         if (isVipOrder(order)) {
             logger.info("[VIP消费者] 检测到VIP订单，进行特殊处理: orderId={}", order.getOrderId());
