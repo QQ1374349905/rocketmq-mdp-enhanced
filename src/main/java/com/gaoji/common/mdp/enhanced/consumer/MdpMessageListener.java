@@ -3,6 +3,7 @@ package com.gaoji.common.mdp.enhanced.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gaoji.common.mdp.enhanced.converter.ParameterConverter;
 import com.gaoji.common.mdp.enhanced.domain.MdpMessage;
+import com.gaoji.common.mdp.enhanced.idempotent.IdempotentProcessor;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;
@@ -18,6 +19,7 @@ import java.util.List;
  * 增强版MDP消息监听器
  * 支持灵活参数转换和延迟消息处理
  * 支持根据消息中的方法名动态调用对应方法
+ * 支持幂等性保证，防止消息重复消费
  */
 public class MdpMessageListener implements MessageListenerConcurrently {
 
@@ -26,15 +28,27 @@ public class MdpMessageListener implements MessageListenerConcurrently {
 
     private final Object consumerBean;
     private final boolean flexibleConversion;
+    private final IdempotentProcessor idempotentProcessor;
 
     public MdpMessageListener(Object consumerBean, Method handleMethod, boolean flexibleConversion) {
         this.consumerBean = consumerBean;
         this.flexibleConversion = flexibleConversion;
+        this.idempotentProcessor = null;
+    }
+
+    public MdpMessageListener(Object consumerBean, Method handleMethod, boolean flexibleConversion,
+                              IdempotentProcessor idempotentProcessor) {
+        this.consumerBean = consumerBean;
+        this.flexibleConversion = flexibleConversion;
+        this.idempotentProcessor = idempotentProcessor;
     }
 
     @Override
     public ConsumeConcurrentlyStatus consumeMessage(List<MessageExt> msgs, ConsumeConcurrentlyContext context) {
         for (MessageExt msg : msgs) {
+            Method handleMethod = null;
+            Object parameter = null;
+
             try {
                 String body = new String(msg.getBody(), StandardCharsets.UTF_8);
                 log.debug("接收消息 - Topic: {}, MsgId: {}, Tags: {}",
@@ -49,7 +63,7 @@ public class MdpMessageListener implements MessageListenerConcurrently {
                     throw new IllegalStateException("消息中未包含方法名: " + msg.getMsgId());
                 }
 
-                Method handleMethod = findMethodByName(consumerBean.getClass(), methodName);
+                handleMethod = findMethodByName(consumerBean.getClass(), methodName);
                 if (handleMethod == null) {
                     throw new IllegalStateException(
                         String.format("消费者 %s 中未找到方法: %s",
@@ -58,15 +72,41 @@ public class MdpMessageListener implements MessageListenerConcurrently {
                 handleMethod.setAccessible(true);
 
                 // 转换参数
-                Object parameter = convertParameter(enhancedMessage, handleMethod);
+                parameter = convertParameter(enhancedMessage, handleMethod);
+
+                // 幂等性检查
+                if (idempotentProcessor != null && idempotentProcessor.needsIdempotent(handleMethod)) {
+                    boolean canProcess = idempotentProcessor.checkIdempotent(handleMethod, parameter, msg.getMsgId());
+                    if (!canProcess) {
+                        log.info("跳过重复消息 - MsgId: {}, Method: {}", msg.getMsgId(), methodName);
+                        continue; // 跳过重复消息，继续处理下一条
+                    }
+                }
 
                 // 调用处理方法
                 handleMethod.invoke(consumerBean, parameter);
 
+                // 标记消息处理成功
+                if (idempotentProcessor != null && idempotentProcessor.needsIdempotent(handleMethod)) {
+                    idempotentProcessor.markSuccess(handleMethod, parameter, msg.getMsgId());
+                }
+
                 log.debug("消息处理成功 - MsgId: {}, Method: {}", msg.getMsgId(), methodName);
+
+            } catch (IdempotentProcessor.DuplicateMessageException e) {
+                log.warn("重复消息异常 - MsgId: {}, Error: {}", msg.getMsgId(), e.getMessage());
+                return ConsumeConcurrentlyStatus.RECONSUME_LATER;
+
             } catch (Exception e) {
                 log.error("消息处理失败 - Topic: {}, MsgId: {}, Error: {}",
                         msg.getTopic(), msg.getMsgId(), e.getMessage(), e);
+
+                // 标记消息处理失败（移除去重记录，允许重试）
+                if (idempotentProcessor != null && handleMethod != null && parameter != null
+                        && idempotentProcessor.needsIdempotent(handleMethod)) {
+                    idempotentProcessor.markFailed(handleMethod, parameter, msg.getMsgId());
+                }
+
                 // 返回RECONSUME_LATER触发重试
                 return ConsumeConcurrentlyStatus.RECONSUME_LATER;
             }

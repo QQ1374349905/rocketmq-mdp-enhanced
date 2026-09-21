@@ -258,4 +258,140 @@ public class MdpExampleTest {
         vipOrderMdpClient.sendOrderAsync(order);
         System.out.println("VIP异步订单已提交");
     }
+
+    /**
+     * 场景9: 测试消息幂等性保证（重复发送）
+     *
+     * 流程:
+     * 1. 发送同一个订单消息3次（相同的orderId）
+     * 2. 第一次消费成功，记录去重标识
+     * 3. 第二次和第三次检测到重复，直接跳过
+     * 4. 最终订单只被处理一次
+     *
+     * 幂等性保证机制:
+     * - @Idempotent 注解标注需要幂等性保证的方法
+     * - keyExpression = "#order.orderId" 从参数中提取业务唯一键
+     * - IdempotentService 记录已处理的消息
+     * - 重复消息直接跳过，返回消费成功
+     *
+     * 关键问题场景:
+     * ❌ 问题: 多生产者发送相同订单 → 重复创建订单
+     * ❌ 问题: 消费失败重试 → 重复扣库存/扣款
+     * ❌ 问题: RocketMQ at-least-once 保证 → 消息可能重复投递
+     * ✅ 解决: 基于业务唯一键（订单ID）的幂等性保证
+     */
+    @Test
+    public void testIdempotentMessageConsume() throws InterruptedException {
+        OrderInfo order = new OrderInfo(
+            "ORDER_IDEMPOTENT_001",
+            "USER_IDEMPOTENT",
+            "幂等性测试商品",
+            9999.00
+        );
+
+        System.out.println("=== 测试消息幂等性保证 ===");
+        System.out.println("发送相同订单消息3次，验证只处理一次");
+        System.out.println();
+
+        // 第一次发送
+        System.out.println("[第1次] 发送订单: " + order.getOrderId());
+        orderMdpClient.sendOrder(order);
+        Thread.sleep(1000);
+
+        // 第二次发送（重复）
+        System.out.println("[第2次] 发送相同订单（应该被去重）: " + order.getOrderId());
+        orderMdpClient.sendOrder(order);
+        Thread.sleep(1000);
+
+        // 第三次发送（重复）
+        System.out.println("[第3次] 发送相同订单（应该被去重）: " + order.getOrderId());
+        orderMdpClient.sendOrder(order);
+        Thread.sleep(1000);
+
+        System.out.println();
+        System.out.println("预期结果: 日志中只有1次 '订单处理成功'，其他2次被跳过");
+        System.out.println("=== 幂等性测试完成 ===");
+    }
+
+    /**
+     * 场景10: 测试并发消费幂等性保证
+     *
+     * 流程:
+     * 1. 快速连续发送10条相同订单消息
+     * 2. RocketMQ 可能并发投递给多个消费线程
+     * 3. 分布式锁保证只有一个线程能处理
+     * 4. 其他线程检测到重复，直接跳过
+     *
+     * 并发场景:
+     * - 多个消费线程同时处理相同的 orderId
+     * - 分布式锁（lockTimeout=10s）防止竞态条件
+     * - 第一个获得锁的线程处理消息
+     * - 其他线程等待后检测到已处理，跳过
+     */
+    @Test
+    public void testConcurrentIdempotentConsume() throws InterruptedException {
+        OrderInfo order = new OrderInfo(
+            "ORDER_CONCURRENT_001",
+            "USER_CONCURRENT",
+            "并发幂等性测试",
+            8888.00
+        );
+
+        System.out.println("=== 测试并发消费幂等性保证 ===");
+        System.out.println("快速发送10条相同订单，验证并发场景下的幂等性");
+        System.out.println();
+
+        for (int i = 1; i <= 10; i++) {
+            System.out.println("[" + i + "/10] 发送订单: " + order.getOrderId());
+            orderMdpClient.sendOrderAsync(order);
+            Thread.sleep(50); // 快速发送，模拟并发
+        }
+
+        System.out.println();
+        System.out.println("等待消费完成...");
+        Thread.sleep(5000);
+
+        System.out.println("预期结果: 日志中只有1次 '订单处理成功'，其他9次被去重跳过");
+        System.out.println("=== 并发幂等性测试完成 ===");
+    }
+
+    /**
+     * 场景11: 测试不同订单ID的消息正常消费
+     *
+     * 流程:
+     * 1. 发送10条不同订单ID的消息
+     * 2. 每条消息都有唯一的 orderId
+     * 3. 所有消息都应该被正常处理
+     * 4. 验证幂等性不影响正常消息
+     *
+     * 验证点:
+     * - 幂等性只对相同业务键的消息去重
+     * - 不同业务键的消息独立处理
+     * - 不会误杀正常消息
+     */
+    @Test
+    public void testDifferentOrdersWithIdempotent() throws InterruptedException {
+        System.out.println("=== 测试不同订单的正常消费 ===");
+        System.out.println("发送10条不同订单，验证幂等性不影响正常消息");
+        System.out.println();
+
+        for (int i = 1; i <= 10; i++) {
+            OrderInfo order = new OrderInfo(
+                "ORDER_DIFFERENT_" + String.format("%03d", i),
+                "USER_" + i,
+                "商品 " + i,
+                100.00 * i
+            );
+
+            System.out.println("[" + i + "/10] 发送订单: " + order.getOrderId());
+            orderMdpClient.sendOrderAsync(order);
+        }
+
+        System.out.println();
+        System.out.println("等待消费完成...");
+        Thread.sleep(5000);
+
+        System.out.println("预期结果: 日志中有10次 '订单处理成功'，每条消息都被处理");
+        System.out.println("=== 不同订单消费测试完成 ===");
+    }
 }
