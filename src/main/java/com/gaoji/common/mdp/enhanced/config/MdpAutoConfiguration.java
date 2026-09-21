@@ -22,14 +22,22 @@ public class MdpAutoConfiguration {
         log.info("=== 初始化增强版MDP自动配置 ===");
     }
 
+    /**
+     * 注册 MDP 消费者注册器
+     * 使用 static 方法避免配置类过早实例化
+     */
     @Bean
-    public MdpServerClassRegister enhancedMdpSClassRegister() {
+    public static MdpServerClassRegister enhancedMdpSClassRegister() {
         log.info("注册增强版MDP消费者注册器");
         return new MdpServerClassRegister();
     }
 
+    /**
+     * 注册 MDP 生产者注册器
+     * 使用 static 方法避免配置类过早实例化
+     */
     @Bean
-    public MdpClientClassRegister enhancedMdpCClassRegister() {
+    public static MdpClientClassRegister enhancedMdpCClassRegister() {
         log.info("注册增强版MDP生产者注册器");
         return new MdpClientClassRegister();
     }

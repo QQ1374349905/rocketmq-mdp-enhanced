@@ -7,10 +7,13 @@ import com.gaoji.common.mdp.enhanced.idempotent.RedisIdempotentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.serializer.StringRedisSerializer;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -53,26 +56,53 @@ public class IdempotentConfig {
     private IdempotentService idempotentService;
 
     /**
-     * Redis 幂等性服务 Bean（优先级高）
-     * 当存在 RedisTemplate 时自动配置
+     * 创建 String 类型的 RedisTemplate
+     * 仅当存在 RedisConnectionFactory 时创建
      */
     @Bean
-    @ConditionalOnBean(RedisTemplate.class)
+    @ConditionalOnClass(RedisConnectionFactory.class)
+    @ConditionalOnBean(RedisConnectionFactory.class)
+    @ConditionalOnMissingBean(name = "stringRedisTemplate")
+    public RedisTemplate<String, String> stringRedisTemplate(RedisConnectionFactory connectionFactory) {
+        log.info("初始化 StringRedisTemplate 用于幂等性服务");
+
+        RedisTemplate<String, String> template = new RedisTemplate<>();
+        template.setConnectionFactory(connectionFactory);
+
+        // 使用 String 序列化器
+        StringRedisSerializer serializer = new StringRedisSerializer();
+        template.setKeySerializer(serializer);
+        template.setValueSerializer(serializer);
+        template.setHashKeySerializer(serializer);
+        template.setHashValueSerializer(serializer);
+
+        template.afterPropertiesSet();
+
+        log.info("✅ StringRedisTemplate 初始化完成");
+        return template;
+    }
+
+    /**
+     * Redis 幂等性服务 Bean（优先级高）
+     * 当存在 RedisTemplate<String, String> 时自动配置
+     */
+    @Bean
+    @ConditionalOnBean(name = "stringRedisTemplate")
     @ConditionalOnMissingBean(IdempotentService.class)
-    public IdempotentService redisIdempotentService(RedisTemplate<String, String> redisTemplate) {
+    public IdempotentService redisIdempotentService(RedisTemplate<String, String> stringRedisTemplate) {
         log.info("初始化幂等性服务 - 使用 Redis 实现（RedisIdempotentService）");
-        log.info("Redis 实现支持分布式部署，适合生产环境");
-        IdempotentService service = new RedisIdempotentService(redisTemplate);
+        log.info("✅ Redis 实现支持分布式部署，适合生产环境");
+        IdempotentService service = new RedisIdempotentService(stringRedisTemplate);
         this.idempotentService = service;
         return service;
     }
 
     /**
      * 内存幂等性服务 Bean（兜底实现）
-     * 当不存在 RedisTemplate 时使用
+     * 当不存在 RedisConnectionFactory 时使用
      */
     @Bean
-    @ConditionalOnMissingBean({RedisTemplate.class, IdempotentService.class})
+    @ConditionalOnMissingBean({RedisConnectionFactory.class, IdempotentService.class})
     public IdempotentService memoryIdempotentService() {
         log.info("初始化幂等性服务 - 使用内存实现（MemoryIdempotentService）");
         log.warn("⚠️  内存实现不支持分布式部署，仅适合单机/测试环境");
