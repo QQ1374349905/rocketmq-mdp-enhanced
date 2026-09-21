@@ -5,14 +5,15 @@
 **Module Name**: gaoji-common-mdp-enhanced  
 **Version**: 1.0.0  
 **Base Reference**: gaoji-common-mdp-3.2.0  
-**Location**: E:/IdeaProjects/gaoji-nldb-settlement/gaoji-common-mdp-enhanced/
+**Location**: E:/IdeaProjects/gaoji-common-mdp-enhanced/
 
 ## Overview
 
-Enhanced MDP (Message-Driven Programming) is an improved version of the original gaoji-common-mdp library, designed to simplify RocketMQ message handling in Spring Boot applications with two major enhancements:
+Enhanced MDP (Message-Driven Programming) is an improved version of the original gaoji-common-mdp library, designed to simplify RocketMQ message handling in Spring Boot applications with three major enhancements:
 
 1. **Delayed Async Message Support** - Built-in support for delayed message delivery with 18 configurable delay levels
 2. **Flexible Parameter Conversion** - Automatic parameter type conversion without requiring same package names
+3. **Message Idempotency** - Redis/Memory-based duplicate message detection and prevention
 
 ## Key Improvements Over Original MDP
 
@@ -25,7 +26,7 @@ Enhanced MDP (Message-Driven Programming) is an improved version of the original
 ### 2. Delayed Message Support ⏰
 ```java
 // Send message with 1-minute delay
-producer.sendDelayed(order, 5);
+client.sendDelayedMessage(order, 5);
 
 // 18 delay levels supported: 1s, 5s, 10s, 30s, 1m, 2m, 3m, 4m, 5m, 6m, 7m, 8m, 9m, 10m, 20m, 30m, 1h, 2h
 ```
@@ -36,9 +37,17 @@ producer.sendDelayed(order, 5);
 class OrderDTO { String orderId; BigDecimal amount; }
 
 // Consumer (package: com.example.consumer)
-@MdpHandler
-public void handle(OrderInfo order) {  // Different package - works!
+public void onMessage(OrderInfo order) {  // Different package - works!
     // Automatic conversion from OrderDTO to OrderInfo
+}
+```
+
+### 4. Message Idempotency 🛡️
+```java
+@Idempotent(key = "orderId", timeout = 86400)
+public void onMessage(OrderInfo order) {
+    // Executes only once per orderId
+    processOrder(order);
 }
 ```
 
@@ -47,23 +56,27 @@ public void handle(OrderInfo order) {  // Different package - works!
 ```
 Enhanced MDP Architecture
 ├── Annotations Layer
-│   ├── @MdpProducer     - Mark producer classes
-│   ├── @MdpConsumer     - Mark consumer classes
-│   └── @MdpHandler      - Mark handler methods
+│   ├── @MdpClient      - Mark producer interfaces
+│   ├── @MdpServer      - Mark consumer classes
+│   ├── @MdpMethod      - Mark producer methods
+│   └── @Idempotent     - Mark idempotent consumer methods
 │
 ├── Core Components
-│   ├── EnhancedMdpProducer        - Producer with delay support
-│   ├── EnhancedMdpMessageListener - Consumer with flexible conversion
-│   └── FlexibleParameterConverter - Multi-strategy conversion
+│   ├── MdpInterfaceGenerator      - Producer proxy generation
+│   ├── MdpMessageListener         - Consumer with flexible conversion
+│   ├── ParameterConverter         - Multi-strategy conversion
+│   └── IdempotentProcessor        - Idempotency handling
 │
 ├── Domain Model
-│   └── EnhancedMdpMessage<T>      - Message wrapper with metadata
+│   └── MdpMessage<T>              - Message wrapper with metadata
 │
 ├── Registry
-│   └── EnhancedMdpRegistry        - Auto-registration of producers/consumers
+│   ├── MdpClientClassRegister     - Auto-registration of producers
+│   └── MdpServerClassRegister     - Auto-registration of consumers
 │
 └── Auto-Configuration
-    └── Spring Boot auto-config     - Zero-configuration setup
+    ├── MdpAutoConfiguration       - MDP auto-config
+    └── IdempotentConfig           - Idempotency auto-config
 ```
 
 ## Module Structure
@@ -72,40 +85,43 @@ Enhanced MDP Architecture
 gaoji-common-mdp-enhanced/
 ├── pom.xml                         # Maven configuration
 ├── README.md                       # Comprehensive documentation
+├── README_IDEMPOTENT.md            # Idempotency guide
 ├── BUILD_GUIDE.md                  # Build and installation guide
 ├── QUICK_START.md                  # 5-minute quick start
 │
 └── src/main/java/com/gaoji/common/mdp/enhanced/
     ├── annotation/                 # Annotation definitions
-    │   ├── EnableEnhancedMdp.java
-    │   ├── MdpConsumer.java
-    │   ├── MdpProducer.java
-    │   └── MdpHandler.java
+    │   ├── EnableMdp.java
+    │   ├── MdpClient.java
+    │   ├── MdpServer.java
+    │   ├── MdpMethod.java
+    │   └── Idempotent.java
     │
     ├── config/                     # Spring Boot auto-configuration
-    │   └── EnhancedMdpAutoConfiguration.java
+    │   ├── MdpAutoConfiguration.java
+    │   └── IdempotentConfig.java
     │
     ├── consumer/                   # Message consumer components
-    │   └── EnhancedMdpMessageListener.java
+    │   └── MdpMessageListener.java
     │
     ├── converter/                  # Parameter conversion logic
-    │   └── FlexibleParameterConverter.java
+    │   └── ParameterConverter.java
     │
     ├── domain/                     # Domain models
-    │   └── EnhancedMdpMessage.java
+    │   └── MdpMessage.java
     │
-    ├── producer/                   # Message producer components
-    │   └── EnhancedMdpProducer.java
+    ├── generator/                  # Proxy generator
+    │   └── MdpInterfaceGenerator.java
     │
-    ├── registry/                   # Component registration
-    │   └── EnhancedMdpRegistry.java
+    ├── idempotent/                 # Idempotency components
+    │   ├── IdempotentService.java
+    │   ├── IdempotentProcessor.java
+    │   ├── RedisIdempotentService.java
+    │   └── MemoryIdempotentService.java
     │
-    └── example/                    # Usage examples
-        ├── OrderDTO.java           # Producer DTO example
-        ├── OrderInfo.java          # Consumer DTO example
-        ├── OrderPaymentProducer.java
-        ├── OrderPaymentConsumer.java
-        └── OrderService.java
+    └── register/                   # Component registration
+        ├── MdpClientClassRegister.java
+        └── MdpServerClassRegister.java
 ```
 
 ## Core Features
@@ -115,15 +131,15 @@ gaoji-common-mdp-enhanced/
 **Original MDP**:
 ```java
 // Manual topic/group configuration required
-producer.send(topic, group, message);
+@MdpC(service = "order.payment", topic = "order_topic", group = "order_group")
 ```
 
 **Enhanced MDP**:
 ```java
-@MdpProducer(service = "order.payment")  // Topic: order.payment (auto)
-public class OrderProducer {}
+@MdpClient(service = "order.payment")  // Topic: order.payment (auto)
+public interface OrderClient {}
 
-@MdpConsumer(service = "order.payment")  // Group: order.payment_consumer_group (auto)
+@MdpServer(service = "order.payment")  // Group: order.payment_consumer_group (auto)
 public class OrderConsumer {}
 ```
 
@@ -142,8 +158,11 @@ public class OrderConsumer {}
 9  = 5 minutes     18 = 2 hours
 
 // Usage
-producer.sendDelayed(message, 5);  // 1 minute delay
-producer.sendDelayedAsync(message, 17, callback);  // 1 hour delay with callback
+@MdpMethod(isSync = false, supportDelay = true)
+void sendDelayed(OrderDTO order, int delayLevel);
+
+// Call it
+client.sendDelayed(order, 5);  // 1 minute delay
 ```
 
 ### Feature 3: Flexible Conversion
@@ -159,54 +178,82 @@ producer.sendDelayedAsync(message, 17, callback);  // 1 hour delay with callback
 - Compatible types (String ↔ primitives) ✅
 - Nested objects ✅
 
+### Feature 4: Message Idempotency
+
+**Redis Implementation** (Recommended for production):
+- Distributed support
+- Persistent across restarts
+- High performance
+
+**Memory Implementation** (For development/testing):
+- No external dependencies
+- Single-instance only
+- Lost on restart
+
+**Usage**:
+```java
+// Field path extraction
+@Idempotent(key = "orderId", timeout = 86400)
+public void onMessage(OrderInfo order) { }
+
+// MD5-based (default, zero-config)
+@Idempotent
+public void onMessage(OrderInfo order) { }
+
+// Nested field path
+@Idempotent(key = "user.userId")
+public void onMessage(RequestInfo request) { }
+```
+
 ## Usage Example
 
 ### Complete Example
 
 ```java
-// 1. Producer Configuration
-@Component
-@MdpProducer(service = "order.payment")
-public class OrderPaymentProducer {}
+// 1. Producer Interface
+@MdpClient(service = "order.payment")
+public interface OrderPaymentClient {
+    
+    @MdpMethod(isSync = false)
+    void sendOrder(OrderDTO order);
+    
+    @MdpMethod(isSync = false, supportDelay = true)
+    void sendDelayedOrder(OrderDTO order, int delayLevel);
+    
+    @MdpMethod(isSync = true)
+    SendResult sendOrderSync(OrderDTO order);
+}
 
 // 2. Send Messages
 @Service
 public class OrderService {
     @Autowired
-    @Qualifier("enhancedMdpProducer_order.payment")
-    private EnhancedMdpProducer producer;
+    private OrderPaymentClient client;
     
     public void processOrder(OrderDTO order) {
         // Immediate send
-        producer.send(order);
+        client.sendOrder(order);
         
         // Delayed send (10 seconds)
-        producer.sendDelayed(order, 3);
+        client.sendDelayedOrder(order, 3);
         
-        // Async with callback
-        producer.sendAsync(order, new SendCallback() {
-            @Override
-            public void onSuccess(SendResult result) {
-                log.info("Success: {}", result.getMsgId());
-            }
-            
-            @Override
-            public void onException(Throwable e) {
-                log.error("Failed", e);
-            }
-        });
+        // Sync send
+        SendResult result = client.sendOrderSync(order);
+        log.info("Message sent: {}", result.getMsgId());
     }
 }
 
-// 3. Consumer Configuration
+// 3. Consumer
 @Component
-@MdpConsumer(service = "order.payment", maxThreads = 20)
+@MdpServer(service = "order.payment", maxThreads = 20)
 public class OrderPaymentConsumer {
     
-    @MdpHandler
-    public void handleOrder(OrderInfo order) {
+    @Idempotent(key = "orderId", timeout = 86400)
+    public void onMessage(OrderInfo order) {
         // Process order - automatic conversion from OrderDTO
+        // Idempotency ensures this executes only once per orderId
         log.info("Processing order: {}", order.getOrderId());
+        processPayment(order);
     }
 }
 ```
@@ -221,7 +268,18 @@ rocketmq:
   name-server: 127.0.0.1:9876
 ```
 
-That's it! No topic, group, or converter configuration needed.
+### With Redis for Idempotency
+
+```yaml
+rocketmq:
+  name-server: 127.0.0.1:9876
+
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+```
 
 ## Dependencies
 
@@ -232,13 +290,14 @@ That's it! No topic, group, or converter configuration needed.
 - RocketMQ Spring Boot Starter 2.2.1+
 - Jackson 2.11.4+
 - Java 8+
+- Redis (optional, for distributed idempotency)
 ```
 
 ## Building the Module
 
 ### Using Maven
 ```bash
-cd E:/IdeaProjects/gaoji-nldb-settlement/gaoji-common-mdp-enhanced
+cd E:/IdeaProjects/gaoji-common-mdp-enhanced
 mvn clean package -DskipTests
 ```
 
@@ -269,7 +328,7 @@ rocketmq:
 ```
 
 ### Step 3: Use Annotations
-Replace `@MdpS` with `@MdpConsumer` and `@MdpC` with `@MdpProducer`
+Replace `@MdpC` with `@MdpClient` and `@MdpS` with `@MdpServer`
 
 ## Migration Path
 
@@ -283,12 +342,22 @@ public class OrderConsumer {
 
 **To Enhanced MDP**:
 ```java
-@MdpConsumer(service = "nldb.trade.order")
+@Component
+@MdpServer(service = "nldb.trade.order")
 public class OrderConsumer {
-    @MdpHandler
-    public void notifyOrder(OrderNotify order) { }
+    public void onMessage(OrderNotify order) { }
 }
 ```
+
+## Annotation Comparison
+
+| Original MDP | Enhanced MDP | Purpose |
+|--------------|--------------|---------|
+| @MdpC | @MdpClient | Mark producer interface |
+| @MdpS | @MdpServer | Mark consumer class |
+| @MdpMethod | @MdpMethod | Mark producer method |
+| N/A | @Idempotent | Mark idempotent method |
+| N/A | @EnableMdp | Enable MDP (optional) |
 
 ## Benefits
 
@@ -297,19 +366,20 @@ public class OrderConsumer {
 3. **Flexibility** - Works across different package structures
 4. **Maintainability** - Clear separation of concerns
 5. **Scalability** - Easy to add new producers/consumers
-6. **Reliability** - Built-in retry and error handling
+6. **Reliability** - Built-in idempotency and error handling
+7. **Production Ready** - Redis-based distributed idempotency
 
 ## Testing
 
-See `example/` package for:
-- Producer examples (`OrderPaymentProducer.java`)
-- Consumer examples (`OrderPaymentConsumer.java`)
-- Service usage (`OrderService.java`)
-- DTO examples (`OrderDTO.java`, `OrderInfo.java`)
+See `mdp-example/` module for:
+- Complete working examples
+- Integration tests
+- Configuration examples
 
 ## Documentation Files
 
 - **README.md** - Complete feature documentation
+- **README_IDEMPOTENT.md** - Idempotency detailed guide
 - **QUICK_START.md** - 5-minute setup guide
 - **BUILD_GUIDE.md** - Build and installation instructions
 - **PROJECT_SUMMARY.md** (this file) - Project overview
@@ -322,12 +392,13 @@ Potential future features:
 - Metrics and monitoring
 - Message filtering enhancement
 - Batch message support
+- More idempotency strategies
 
 ## Support and Maintenance
 
 For issues or questions:
 1. Check documentation files
-2. Review example code
+2. Review example code in `mdp-example/` module
 3. Consult RocketMQ official documentation
 
 ## License
