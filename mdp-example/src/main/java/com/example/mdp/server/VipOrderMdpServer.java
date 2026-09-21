@@ -1,7 +1,7 @@
-package com.gaoji.common.mdp.example.server;
+package com.example.mdp.server;
 
 import com.rocketmq.mdp.enhanced.annotation.MdpServer;
-import com.gaoji.common.mdp.example.domain.OrderInfo;
+import com.example.mdp.domain.OrderInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
