@@ -23,40 +23,41 @@ rocketmq:
   name-server: 127.0.0.1:9876
 ```
 
-### Step 3: Create Producer (1 min)
+### Step 3: Create Producer Interface (1 min)
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.MdpProducer;
-import org.springframework.stereotype.Component;
+import com.gaoji.common.mdp.enhanced.annotation.MdpClient;
+import com.gaoji.common.mdp.enhanced.annotation.MdpMethod;
 
-@Component
-@MdpProducer(service = "my.service")
-public class MyProducer {
-    // That's it! Producer is ready
+@MdpClient(service = "my.service")
+public interface MyServiceClient {
+    
+    @MdpMethod(isSync = false)
+    void sendMessage(MyData data);
+    
+    @MdpMethod(isSync = false, supportDelay = true)
+    void sendDelayedMessage(MyData data, int delayLevel);
 }
 ```
 
 ### Step 4: Send Messages (1 min)
 
 ```java
-import com.gaoji.common.mdp.enhanced.producer.EnhancedMdpProducer;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 @Service
 public class MyService {
     
     @Autowired
-    @Qualifier("enhancedMdpProducer_my.service")
-    private EnhancedMdpProducer producer;
+    private MyServiceClient client;
     
     public void sendMessage(MyData data) {
-        producer.send(data);  // Send immediately
+        client.sendMessage(data);  // Send immediately
     }
     
     public void sendDelayedMessage(MyData data) {
-        producer.sendDelayed(data, 5);  // Send with 1-minute delay
+        client.sendDelayedMessage(data, 5);  // Send with 1-minute delay
     }
 }
 ```
@@ -64,16 +65,14 @@ public class MyService {
 ### Step 5: Create Consumer (1 min)
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.MdpConsumer;
-import com.gaoji.common.mdp.enhanced.annotation.MdpHandler;
+import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
 import org.springframework.stereotype.Component;
 
 @Component
-@MdpConsumer(service = "my.service")
+@MdpServer(service = "my.service")
 public class MyConsumer {
     
-    @MdpHandler
-    public void handleMessage(MyData data) {
+    public void onMessage(MyData data) {
         System.out.println("Received: " + data);
         // Your business logic here
     }
@@ -87,6 +86,7 @@ Your enhanced MDP is now ready to:
 - ✅ Send delayed messages
 - ✅ Convert parameters flexibly
 - ✅ Handle async messages
+- ✅ Support message idempotency
 
 ## Common Use Cases
 
@@ -95,23 +95,23 @@ Your enhanced MDP is now ready to:
 ```java
 // Send order for processing after 10 seconds
 OrderDTO order = new OrderDTO("ORD001", "ORDER123", new BigDecimal("100.00"));
-producer.sendDelayed(order, 3);  // delay level 3 = 10 seconds
+orderClient.sendDelayedMessage(order, 3);  // delay level 3 = 10 seconds
 ```
 
-### Use Case 2: Async Message with Callback
+### Use Case 2: Message Idempotency
 
 ```java
-producer.sendAsync(order, new SendCallback() {
-    @Override
-    public void onSuccess(SendResult result) {
-        log.info("Sent: {}", result.getMsgId());
-    }
+@Component
+@MdpServer(service = "order.service")
+public class OrderConsumer {
     
-    @Override
-    public void onException(Throwable e) {
-        log.error("Failed", e);
+    // Prevent duplicate message processing
+    @Idempotent(key = "orderId", timeout = 86400)
+    public void onMessage(OrderInfo order) {
+        // This will only execute once per orderId
+        processOrder(order);
     }
-});
+}
 ```
 
 ### Use Case 3: Flexible Parameter Conversion
@@ -124,8 +124,7 @@ public class OrderDTO {
 }
 
 // Consumer receives as OrderInfo (package: com.example.model)
-@MdpHandler
-public void handleOrder(OrderInfo order) {  // Auto-converted!
+public void onMessage(OrderInfo order) {  // Auto-converted!
     // Different package, same fields - works automatically
 }
 ```
@@ -144,8 +143,8 @@ public void handleOrder(OrderInfo order) {  // Auto-converted!
 ## Next Steps
 
 - Read [README.md](README.md) for detailed documentation
-- Check [BUILD_GUIDE.md](BUILD_GUIDE.md) for building instructions
-- Review example code in `src/main/java/com/gaoji/common/mdp/enhanced/example/`
+- Check [README_IDEMPOTENT.md](README_IDEMPOTENT.md) for idempotency guide
+- Review example code in `mdp-example/` module
 
 ## Troubleshooting
 
@@ -156,7 +155,7 @@ public void handleOrder(OrderInfo order) {  // Auto-converted!
 **Q: Message not received?**
 - Ensure topic names match (both use same service name)
 - Check consumer is annotated with `@Component`
-- Verify method has `@MdpHandler` annotation
+- Verify method is named `onMessage`
 
 **Q: Parameter conversion failed?**
 - Ensure field names match

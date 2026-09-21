@@ -56,38 +56,45 @@ if (存在 RedisTemplate Bean) {
 
 ### 2. 灵活的业务键提取
 
-**方式1：使用 SpEL 表达式（推荐）**
+**方式1：使用参数 MD5（推荐，零配置）**
 
-使用 SpEL 表达式从消息参数中提取业务唯一键：
-
-```java
-@Idempotent(keyExpression = "#order.orderId")  // 订单ID
-public void sendOrder(OrderInfo order) { ... }
-
-@Idempotent(keyExpression = "#user.userId")    // 用户ID
-public void updateUser(UserInfo user) { ... }
-
-@Idempotent(keyExpression = "#order.orderId + '_' + #order.userId")  // 组合键
-public void processOrder(OrderInfo order) { ... }
-```
-
-**方式2：使用参数 MD5（默认）**
-
-不指定 `keyExpression` 时，框架会自动使用参数的 MD5 值：
+不指定 `key` 时，框架会自动使用参数的 MD5 值：
 
 ```java
 @Idempotent  // 使用参数对象的 MD5 作为业务键
 public void sendNotification(OrderInfo order) { ... }
 ```
 
-**MD5 计算逻辑：**
+**方式2：使用字段路径提取**
+
+使用反射从消息参数中提取业务唯一键：
+
+```java
+@Idempotent(key = "orderId")  // 调用 order.getOrderId()
+public void sendOrder(OrderInfo order) { ... }
+
+@Idempotent(key = "userId")    // 调用 user.getUserId()
+public void updateUser(UserInfo user) { ... }
+
+@Idempotent(key = "user.userId")  // 嵌套路径：调用 request.getUser().getUserId()
+public void processOrder(RequestInfo request) { ... }
+```
+
+**字段路径提取逻辑：**
+- 简单路径：`orderId` → 调用 `getOrderId()`
+- 嵌套路径：`user.userId` → 调用 `getUser().getUserId()`
+- 多层嵌套：`order.user.id` → 调用 `getOrder().getUser().getId()`
+- 提取失败时自动降级到 MD5
+
+**MD5 计算逻辑（默认策略或降级策略）：**
 - 基本类型（String、Number、Boolean）→ 直接 `toString()`
 - 对象类型 → JSON 序列化后计算 MD5
 - 相同内容的对象生成相同的 MD5（避免内存地址误判）
 
 **适用场景：**
-- ✅ 消息没有明确的业务唯一键
-- ✅ 完全基于消息内容去重
+- ✅ 消息有明确的业务唯一键 → 使用字段路径
+- ✅ 消息没有明确的业务唯一键 → 使用 MD5（默认）
+- ✅ 完全基于消息内容去重 → 使用 MD5
 - ⚠️ 对象结构变化会导致 MD5 变化
 
 ### 3. 分布式锁防并发
@@ -96,7 +103,7 @@ public void sendNotification(OrderInfo order) { ... }
 
 ```java
 @Idempotent(
-    keyExpression = "#order.orderId",
+    key = "orderId",
     lockTimeout = 10  // 分布式锁超时时间（秒）
 )
 ```
@@ -110,7 +117,7 @@ public void sendNotification(OrderInfo order) { ... }
 
 ```java
 @Idempotent(
-    keyExpression = "#order.orderId",
+    key = "orderId",
     timeout = 86400  // 去重记录保留时间（秒）
 )
 ```
@@ -124,19 +131,19 @@ public void sendNotification(OrderInfo order) { ... }
 
 ```java
 @Idempotent(
-    keyExpression = "#order.orderId",
+    key = "orderId",
     duplicateStrategy = DuplicateStrategy.SKIP  // 跳过重复消息（默认）
 )
 
 @Idempotent(
-    keyExpression = "#order.orderId",
+    key = "orderId",
     duplicateStrategy = DuplicateStrategy.EXCEPTION  // 抛异常，触发重试
 )
 ```
 
 ## 使用示例
 
-### 1. 基本使用（SpEL 表达式）
+### 1. 基本使用（字段路径提取）
 
 ```java
 @Component
@@ -144,7 +151,7 @@ public void sendNotification(OrderInfo order) { ... }
 public class OrderMdpServer {
 
     // 添加 @Idempotent 注解即可
-    @Idempotent(keyExpression = "#order.orderId", timeout = 86400)
+    @Idempotent(key = "orderId", timeout = 86400)
     public void sendOrder(OrderInfo order) {
         logger.info("处理订单: {}", order.getOrderId());
         

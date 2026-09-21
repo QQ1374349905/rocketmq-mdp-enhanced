@@ -2,10 +2,11 @@
 
 ## 概述
 
-`gaoji-common-mdp-enhanced` 是基于原始 `gaoji-common-mdp-3.2.0.jar` 的增强版本，完全兼容原有架构，新增两大核心功能：
+`gaoji-common-mdp-enhanced` 是基于原始 `gaoji-common-mdp-3.2.0.jar` 的增强版本，完全兼容原有架构，新增三大核心功能：
 
 1. **延迟异步消息支持** - 支持18个延迟级别（1秒到2小时）
 2. **灵活参数转换** - 自动转换不同包名、不同类之间的参数，无需强制要求相同包名
+3. **消息幂等性保证** - 支持 Redis/内存双实现，防止消息重复消费
 
 ## 核心特性
 
@@ -25,17 +26,24 @@
 - 支持字段子集转换
 - 多种转换策略（JSON、字段映射、类型强制转换）
 
+### 4. 消息幂等性保证 🛡️
+- 支持 Redis 和内存双实现，自动选择
+- 基于业务键或 MD5 的消息去重
+- 分布式锁防并发冲突
+- 灵活的过期和重试策略
+
 ## 与原始MDP的对比
 
 | 特性 | 原始MDP | 增强版MDP |
 |------|---------|-----------|
-| 生产者定义 | @MdpC | @MdpCEnhanced |
-| 消费者定义 | @MdpS | @MdpSEnhanced |
-| 方法定义 | @MdpMethod | @MdpMethodEnhanced |
+| 生产者定义 | @MdpC | @MdpClient |
+| 消费者定义 | @MdpS | @MdpServer |
+| 方法定义 | @MdpMethod | @MdpMethod |
 | Topic配置 | 手动配置 | 自动生成（service名称） |
 | Group配置 | 手动配置 | 自动生成（service + "_consumer_group"） |
 | 延迟消息 | 不支持 | 支持（18个级别） |
 | 参数转换 | 需要相同包名 | 灵活转换，不同包名也可以 |
+| 幂等性保证 | 不支持 | 支持（Redis/内存双实现） |
 | 实现方式 | 动态代理 | 动态代理（兼容原有架构） |
 
 ## 安装
@@ -70,11 +78,11 @@ import com.gaoji.common.mdp.enhanced.annotation.MdpMethod;
 import com.gaoji.common.mdp.enhanced.annotation.MdpMethodEnhanced;
 
 /**
- * 生产者接口 - 使用 @MdpCEnhanced 标注
+ * 生产者接口 - 使用 @MdpClient 标注
  * Topic自动生成为: "nldb.trade.order.ret"
  */
 @MdpClient(service = "nldb.trade.order.ret")
-public interface OrderRetMdpEnhanced {
+public interface OrderRetMdpClient {
 
     /**
      * 发送普通异步消息
@@ -106,7 +114,7 @@ public class OrderService {
 
     // 直接注入接口，框架自动生成实现类
     @Autowired
-    private OrderRetMdpEnhanced orderRetMdp;
+    private OrderRetMdpClient orderRetMdp;
 
     // 发送普通消息
     public void sendResponse(TradeMqResponse response) {
@@ -137,7 +145,7 @@ import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
 import org.springframework.stereotype.Component;
 
 /**
- * 消费者类 - 使用 @MdpSEnhanced 标注
+ * 消费者类 - 使用 @MdpServer 标注
  * Topic自动生成为: "nldb.trade.order"
  * Consumer Group自动生成为: "nldb.trade.order_consumer_group"
  */
@@ -147,7 +155,7 @@ import org.springframework.stereotype.Component;
         maxThreads = 20,
         flexibleConversion = true  // 开启灵活参数转换
 )
-public class OrderConsumerEnhanced {
+public class OrderConsumer {
 
     /**
      * 消息处理方法，方法名必须是 onMessage
@@ -184,7 +192,8 @@ public class OrderNotify {  // 不同包名，不同类名
 }
 
 // 消费者自动转换，无需手动处理
-@MdpSEnhanced(service = "order.notify", flexibleConversion = true)
+@Component
+@MdpServer(service = "order.notify", flexibleConversion = true)
 public class OrderConsumer {
     public void onMessage(OrderNotify order) {
         // 自动从 OrderDTO 转换为 OrderNotify
@@ -192,7 +201,69 @@ public class OrderConsumer {
 }
 ```
 
-## 延迟级别参考表
+### 5. 消息幂等性保证示例
+
+增强版MDP支持消息幂等性保证，防止重复消费：
+
+```java
+import com.gaoji.common.mdp.enhanced.annotation.Idempotent;
+
+@Component
+@MdpServer(service = "order.service")
+public class OrderConsumer {
+
+    /**
+     * 方式1：使用字段路径提取业务键
+     * 通过反射调用 order.getOrderId() 作为唯一键
+     */
+    @Idempotent(key = "orderId", timeout = 86400)
+    public void onMessage(OrderInfo order) {
+        // 相同 orderId 的消息只会处理一次
+        System.out.println("处理订单: " + order.getOrderId());
+    }
+
+    /**
+     * 方式2：使用默认 MD5（推荐，零配置）
+     * 自动使用整个参数对象的 MD5 作为唯一键
+     */
+    @Idempotent
+    public void handleNotification(NotificationInfo notification) {
+        // 相同内容的消息只会处理一次
+        System.out.println("处理通知: " + notification);
+    }
+
+    /**
+     * 方式3：嵌套字段路径
+     * 调用 request.getUser().getUserId()
+     */
+    @Idempotent(key = "user.userId", timeout = 3600)
+    public void processRequest(RequestInfo request) {
+        System.out.println("处理请求: " + request.getUser().getUserId());
+    }
+}
+```
+
+**幂等性配置（可选）：**
+
+```yaml
+# application.yml
+spring:
+  redis:
+    host: localhost
+    port: 6379
+    # 配置 Redis 后自动使用 RedisIdempotentService（推荐）
+    # 不配置则使用 MemoryIdempotentService（仅适合单机测试）
+```
+
+**幂等性特性：**
+- ✅ 自动选择 Redis/内存实现
+- ✅ 支持字段路径提取或 MD5 去重
+- ✅ 分布式锁防并发
+- ✅ 灵活的过期时间和重复策略
+
+详细文档请参考：[README_IDEMPOTENT.md](README_IDEMPOTENT.md)
+
+
 
 | 级别 | 延迟时间 | 级别 | 延迟时间 |
 |------|---------|------|---------|
@@ -231,20 +302,20 @@ public class OrderConsumer {
 
 ```java
 // 生产者 - 支持延迟消息
-@MdpCEnhanced(service = "nldb.trade.order.ret")
-public interface OrderRetMdpEnhanced {
-    @MdpMethodEnhanced(isSync = false)
+@MdpClient(service = "nldb.trade.order.ret")
+public interface OrderRetMdpClient {
+    @MdpMethod(isSync = false)
     void onMessage(TradeMqResponse response);
     
     // 新增：延迟消息方法
-    @MdpMethodEnhanced(isSync = false, supportDelay = true)
+    @MdpMethod(isSync = false, supportDelay = true)
     void onMessageDelayed(TradeMqResponse response, int delayLevel);
 }
 
 // 消费者 - 支持灵活参数转换
 @Component
-@MdpSEnhanced(service = "nldb.trade.order", flexibleConversion = true)
-public class OrderConsumerEnhanced {
+@MdpServer(service = "nldb.trade.order", flexibleConversion = true)
+public class OrderConsumer {
     public void onMessage(OrderNotify orderNotify) {
         // 处理消息 - 自动转换不同包名的类
     }
@@ -256,7 +327,8 @@ public class OrderConsumerEnhanced {
 ### 自定义Topic和Group
 
 ```java
-@MdpSEnhanced(
+@Component
+@MdpServer(
     service = "order.service",
     topic = "custom_topic",           // 覆盖自动生成的topic
     group = "custom_consumer_group",  // 覆盖自动生成的group
@@ -273,7 +345,8 @@ public class CustomConsumer {
 ### 关闭灵活参数转换
 
 ```java
-@MdpSEnhanced(
+@Component
+@MdpServer(
     service = "order.service",
     flexibleConversion = false  // 关闭灵活转换，要求类型完全匹配
 )
