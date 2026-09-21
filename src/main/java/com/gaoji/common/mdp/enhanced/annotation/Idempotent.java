@@ -15,15 +15,30 @@ import java.lang.annotation.*;
  * 4. 积分发放 - 防止重复发放积分
  *
  * 去重策略：
- * - keyExpression: SpEL表达式，从消息参数中提取业务唯一键（如订单ID）
- * - timeout: 去重记录过期时间（秒），默认24小时
- * - lockTimeout: 分布式锁超时时间（秒），默认10秒
+ * - 默认：使用整个参数对象的 MD5 值作为业务键（推荐，零配置）
+ * - 可选：使用 key 指定字段路径提取业务键（通过反射调用 getter 方法）
  *
- * 示例：
+ * 示例1（推荐 - 使用默认 MD5）：
  * <pre>
- * {@code @Idempotent(keyExpression = "#order.orderId", timeout = 86400)}
+ * {@code @Idempotent}
  * public void sendOrder(OrderInfo order) {
- *     // 业务逻辑
+ *     // 自动使用 order 对象的 MD5 去重
+ * }
+ * </pre>
+ *
+ * 示例2（可选 - 指定字段路径）：
+ * <pre>
+ * {@code @Idempotent(key = "orderId")}
+ * public void sendOrder(OrderInfo order) {
+ *     // 调用 order.getOrderId() 作为业务键
+ * }
+ * </pre>
+ *
+ * 示例3（支持嵌套路径）：
+ * <pre>
+ * {@code @Idempotent(key = "user.userId")}
+ * public void handleMessage(RequestInfo request) {
+ *     // 调用 request.getUser().getUserId()
  * }
  * </pre>
  */
@@ -33,17 +48,30 @@ import java.lang.annotation.*;
 public @interface Idempotent {
 
     /**
-     * 业务唯一键提取表达式（SpEL）
+     * 是否启用幂等性
+     * 默认 true
      *
-     * 从方法参数中提取业务唯一标识
-     * 示例：
-     * - "#order.orderId" - 提取订单ID
-     * - "#user.userId" - 提取用户ID
-     * - "#order.orderId + '_' + #order.userId" - 组合键
-     *
-     * 如果不指定（默认为空字符串），则自动使用参数的 MD5 值作为业务键
+     * 设置为 false 可以临时禁用某个方法的幂等性检查
      */
-    String keyExpression() default "";
+    boolean enabled() default true;
+
+    /**
+     * 业务唯一键字段路径
+     *
+     * 通过反射调用参数对象的 getter 方法提取业务键
+     *
+     * 支持格式：
+     * - 简单字段：key = "orderId" → 调用 getOrderId()
+     * - 嵌套字段：key = "user.userId" → 调用 getUser().getUserId()
+     * - 多层嵌套：key = "order.user.id" → 调用 getOrder().getUser().getId()
+     *
+     * 如果不指定（默认为空字符串），则自动使用参数的 MD5 值作为业务键（推荐）
+     *
+     * 注意：
+     * - 字段名自动转换为标准 getter 方法名（首字母大写 + get 前缀）
+     * - 如果 getter 调用失败，会自动降级使用 MD5
+     */
+    String key() default "";
 
     /**
      * 去重记录过期时间（秒）

@@ -4,10 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gaoji.common.mdp.enhanced.annotation.Idempotent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.expression.EvaluationContext;
-import org.springframework.expression.ExpressionParser;
-import org.springframework.expression.spel.standard.SpelExpressionParser;
-import org.springframework.expression.spel.support.StandardEvaluationContext;
 
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -25,7 +21,6 @@ import java.security.MessageDigest;
 public class IdempotentProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotentProcessor.class);
-    private static final ExpressionParser parser = new SpelExpressionParser();
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final IdempotentService idempotentService;
@@ -38,7 +33,8 @@ public class IdempotentProcessor {
      * 检查方法是否需要幂等性保证
      */
     public boolean needsIdempotent(Method method) {
-        return method.isAnnotationPresent(Idempotent.class);
+        Idempotent idempotent = method.getAnnotation(Idempotent.class);
+        return idempotent != null && idempotent.enabled();
     }
 
     /**
@@ -51,15 +47,15 @@ public class IdempotentProcessor {
      */
     public boolean checkIdempotent(Method method, Object parameter, String messageId) {
         Idempotent idempotent = method.getAnnotation(Idempotent.class);
-        if (idempotent == null) {
+        if (idempotent == null || !idempotent.enabled()) {
             return true;
         }
 
         try {
-            String businessKey = extractBusinessKey(idempotent.keyExpression(), method, parameter);
+            String businessKey = extractBusinessKey(idempotent.key(), method, parameter);
             if (businessKey == null || businessKey.isEmpty()) {
-                log.error("无法提取业务唯一键 - method: {}, expression: {}",
-                        method.getName(), idempotent.keyExpression());
+                log.error("无法提取业务唯一键 - method: {}, key: {}",
+                        method.getName(), idempotent.key());
                 return true;
             }
 
@@ -104,7 +100,7 @@ public class IdempotentProcessor {
         }
 
         try {
-            String businessKey = extractBusinessKey(idempotent.keyExpression(), method, parameter);
+            String businessKey = extractBusinessKey(idempotent.key(), method, parameter);
             if (businessKey != null && !businessKey.isEmpty()) {
                 idempotentService.markSuccess(businessKey, messageId);
             }
@@ -123,7 +119,7 @@ public class IdempotentProcessor {
         }
 
         try {
-            String businessKey = extractBusinessKey(idempotent.keyExpression(), method, parameter);
+            String businessKey = extractBusinessKey(idempotent.key(), method, parameter);
             if (businessKey != null && !businessKey.isEmpty()) {
                 idempotentService.markFailed(businessKey, messageId);
             }
@@ -133,43 +129,94 @@ public class IdempotentProcessor {
     }
 
     /**
-     * 使用SpEL表达式从参数中提取业务唯一键
-     * 如果未指定表达式，则使用参数的 MD5 值
+     * 从参数中提取业务唯一键
+     *
+     * 策略：
+     * 1. 如果未指定 key，使用参数的 MD5 值（默认）
+     * 2. 如果指定了 key，通过反射调用 getter 方法提取
+     * 3. 如果反射失败，降级使用 MD5
+     *
+     * @param key 字段路径，如 "orderId" 或 "user.userId"
+     * @param method 消费者方法
+     * @param parameter 方法参数
+     * @return 业务唯一键
      */
-    private String extractBusinessKey(String expression, Method method, Object parameter) {
+    private String extractBusinessKey(String key, Method method, Object parameter) {
         try {
-            // 如果未指定表达式，使用参数的 MD5 值
-            if (expression == null || expression.trim().isEmpty()) {
+            // 1. 未指定 key，使用 MD5（默认策略）
+            if (key == null || key.trim().isEmpty()) {
                 return calculateMd5(parameter);
             }
 
-            // 使用 SpEL 表达式提取业务键
-            StandardEvaluationContext context = new StandardEvaluationContext();
-
-            if (method.getParameterCount() > 0) {
-                // 获取参数名（可能是真实名称如 "order"，也可能是编译后的 "arg0"）
-                String paramName = getParameterName(method, 0);
-                context.setVariable(paramName, parameter);
-
-                // 如果是 argN 格式，尝试从表达式中提取期望的参数名
-                // 例如：表达式 "#order.orderId" 期望参数名是 "order"
-                if (paramName.startsWith("arg") && expression.startsWith("#")) {
-                    String expectedParamName = extractVariableFromExpression(expression);
-                    if (expectedParamName != null && !expectedParamName.equals(paramName)) {
-                        // 同时注册期望的参数名，兼容编译时未保留参数名的情况
-                        context.setVariable(expectedParamName, parameter);
-                        log.debug("参数名降级 - 编译名: {}, 期望名: {}", paramName, expectedParamName);
-                    }
-                }
+            // 2. 通过反射提取字段值
+            Object value = extractValueByPath(parameter, key);
+            if (value != null) {
+                return value.toString();
             }
 
-            Object value = parser.parseExpression(expression).getValue(context);
-            return value != null ? value.toString() : null;
+            // 3. 提取失败，降级到 MD5
+            log.warn("字段路径提取失败，降级使用 MD5 - method: {}, key: {}, parameterType: {}",
+                    method.getName(), key, parameter.getClass().getSimpleName());
+            return calculateMd5(parameter);
 
         } catch (Exception e) {
-            log.error("提取业务唯一键失败 - expression: {}, parameter: {}", expression, parameter, e);
+            log.error("提取业务唯一键失败，降级使用 MD5 - method: {}, key: {}, error: {}",
+                    method.getName(), key, e.getMessage());
+            return calculateMd5(parameter);
+        }
+    }
+
+    /**
+     * 通过字段路径提取值
+     *
+     * 支持：
+     * - 简单路径：orderId → getOrderId()
+     * - 嵌套路径：user.userId → getUser().getUserId()
+     * - 多层嵌套：order.user.id → getOrder().getUser().getId()
+     *
+     * @param obj 对象
+     * @param path 字段路径，用 "." 分隔
+     * @return 字段值，失败返回 null
+     */
+    private Object extractValueByPath(Object obj, String path) {
+        if (obj == null || path == null || path.trim().isEmpty()) {
             return null;
         }
+
+        try {
+            Object current = obj;
+            String[] parts = path.split("\\.");
+
+            for (String part : parts) {
+                if (current == null) {
+                    return null;
+                }
+
+                // 构造 getter 方法名：orderId → getOrderId
+                String methodName = "get" + capitalize(part);
+
+                // 查找并调用 getter 方法
+                Method getter = current.getClass().getMethod(methodName);
+                current = getter.invoke(current);
+            }
+
+            return current;
+
+        } catch (Exception e) {
+            log.debug("字段路径提取失败 - path: {}, objectType: {}, error: {}",
+                    path, obj.getClass().getSimpleName(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 首字母大写
+     */
+    private String capitalize(String str) {
+        if (str == null || str.isEmpty()) {
+            return str;
+        }
+        return str.substring(0, 1).toUpperCase() + str.substring(1);
     }
 
     /**
@@ -216,44 +263,6 @@ public class IdempotentProcessor {
                             (parameter != null ? parameter.hashCode() : 0);
             log.warn("使用降级方案生成业务键 - fallback: {}", fallback);
             return String.valueOf(fallback.hashCode());
-        }
-    }
-
-    /**
-     * 获取参数名（简化版，实际应该从方法签名获取）
-     */
-    private String getParameterName(Method method, int index) {
-        try {
-            return method.getParameters()[index].getName();
-        } catch (Exception e) {
-            return "arg" + index;
-        }
-    }
-
-    /**
-     * 从 SpEL 表达式中提取变量名
-     * 例如：#order.orderId -> order
-     *       #user.id -> user
-     */
-    private String extractVariableFromExpression(String expression) {
-        try {
-            if (expression == null || !expression.startsWith("#")) {
-                return null;
-            }
-
-            // 移除开头的 #
-            String withoutHash = expression.substring(1);
-
-            // 找到第一个 . 的位置
-            int dotIndex = withoutHash.indexOf('.');
-            if (dotIndex > 0) {
-                return withoutHash.substring(0, dotIndex);
-            }
-
-            // 没有 . 则返回整个变量名
-            return withoutHash;
-        } catch (Exception e) {
-            return null;
         }
     }
 

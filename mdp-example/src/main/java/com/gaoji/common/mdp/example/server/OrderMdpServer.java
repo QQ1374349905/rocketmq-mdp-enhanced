@@ -35,7 +35,7 @@ public class OrderMdpServer {
      * - timeout = 86400 去重记录保留24小时
      * - duplicateStrategy = SKIP 重复消息直接跳过，返回消费成功
      */
-    @Idempotent(keyExpression = "#order.orderId", timeout = 86400)
+    @Idempotent(key = "orderId", timeout = 86400)
     public void sendOrder(OrderInfo order) {
         logger.info("收到同步订单消息: {}", order);
         processOrder(order, "同步消息");
@@ -44,7 +44,7 @@ public class OrderMdpServer {
     /**
      * 异步发送订单消息处理方法
      */
-    @Idempotent(keyExpression = "#order.orderId", timeout = 86400)
+    @Idempotent(key = "orderId", timeout = 86400)
     public void sendOrderAsync(OrderInfo order) {
         logger.info("收到异步订单消息: {}", order);
         processOrder(order, "异步消息");
@@ -53,7 +53,7 @@ public class OrderMdpServer {
     /**
      * 延迟订单消息处理方法
      */
-    @Idempotent(keyExpression = "#order.orderId", timeout = 86400)
+    @Idempotent(key = "orderId", timeout = 86400)
     public void sendOrderDelayed(OrderInfo order) {
         logger.info("收到延迟订单消息: {}", order);
         processOrder(order, "延迟消息");
@@ -62,7 +62,7 @@ public class OrderMdpServer {
     /**
      * VIP订单消息处理方法
      */
-    @Idempotent(keyExpression = "#order.orderId", timeout = 86400)
+    @Idempotent(key = "orderId", timeout = 86400)
     public void sendVipOrder(OrderInfo order) {
         logger.info("收到VIP订单消息: {}", order);
         processOrder(order, "VIP消息");
