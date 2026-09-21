@@ -1,7 +1,7 @@
-package com.gaoji.common.mdp.enhanced.annotation;
+package com.rocketmq.mdp.enhanced.annotation;
 
-import com.gaoji.common.mdp.enhanced.config.IdempotentConfig;
-import com.gaoji.common.mdp.enhanced.config.MdpAutoConfiguration;
+import com.rocketmq.mdp.enhanced.config.IdempotentConfig;
+import com.rocketmq.mdp.enhanced.config.MdpAutoConfiguration;
 import org.springframework.context.annotation.Import;
 
 import java.lang.annotation.*;

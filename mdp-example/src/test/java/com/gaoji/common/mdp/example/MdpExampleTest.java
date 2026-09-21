@@ -1,6 +1,6 @@
 package com.gaoji.common.mdp.example;
 
-import com.gaoji.common.mdp.enhanced.enums.DelayLevel;
+import com.rocketmq.mdp.enhanced.enums.DelayLevel;
 import com.gaoji.common.mdp.example.client.OrderMdpClient;
 import com.gaoji.common.mdp.example.client.VipOrderMdpClient;
 import com.gaoji.common.mdp.example.domain.OrderInfo;

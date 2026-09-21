@@ -1,8 +1,8 @@
-package com.gaoji.common.mdp.enhanced.register;
+package com.rocketmq.mdp.enhanced.register;
 
-import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
-import com.gaoji.common.mdp.enhanced.consumer.MdpMessageListener;
-import com.gaoji.common.mdp.enhanced.idempotent.IdempotentProcessor;
+import com.rocketmq.mdp.enhanced.annotation.MdpServer;
+import com.rocketmq.mdp.enhanced.consumer.MdpMessageListener;
+import com.rocketmq.mdp.enhanced.idempotent.IdempotentProcessor;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
@@ -19,7 +19,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.PreDestroy;
-import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 

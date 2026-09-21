@@ -26,15 +26,15 @@ rocketmq:
 ### Step 3: Create Producer Interface (1 min)
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.MdpClient;
-import com.gaoji.common.mdp.enhanced.annotation.MdpMethod;
+import annotation.rocketmq.mdp.enhanced.MdpClient;
+import annotation.rocketmq.mdp.enhanced.MdpMethod;
 
 @MdpClient(service = "my.service")
 public interface MyServiceClient {
-    
+
     @MdpMethod(isSync = false)
     void sendMessage(MyData data);
-    
+
     @MdpMethod(isSync = false, supportDelay = true)
     void sendDelayedMessage(MyData data, int delayLevel);
 }
@@ -65,13 +65,13 @@ public class MyService {
 ### Step 5: Create Consumer (1 min)
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
+import annotation.rocketmq.mdp.enhanced.MdpServer;
 import org.springframework.stereotype.Component;
 
 @Component
 @MdpServer(service = "my.service")
 public class MyConsumer {
-    
+
     public void onMessage(MyData data) {
         System.out.println("Received: " + data);
         // Your business logic here

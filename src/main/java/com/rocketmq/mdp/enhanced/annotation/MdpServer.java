@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.enhanced.annotation;
+package com.rocketmq.mdp.enhanced.annotation;
 
 import org.springframework.stereotype.Component;
 

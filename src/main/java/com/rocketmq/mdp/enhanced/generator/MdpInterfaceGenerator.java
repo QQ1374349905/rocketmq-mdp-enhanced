@@ -1,10 +1,10 @@
-package com.gaoji.common.mdp.enhanced.generator;
+package com.rocketmq.mdp.enhanced.generator;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gaoji.common.mdp.enhanced.annotation.MdpClient;
-import com.gaoji.common.mdp.enhanced.annotation.MdpMethod;
-import com.gaoji.common.mdp.enhanced.domain.MdpMessage;
-import com.gaoji.common.mdp.enhanced.enums.DelayLevel;
+import com.rocketmq.mdp.enhanced.annotation.MdpClient;
+import com.rocketmq.mdp.enhanced.annotation.MdpMethod;
+import com.rocketmq.mdp.enhanced.domain.MdpMessage;
+import com.rocketmq.mdp.enhanced.enums.DelayLevel;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.Message;

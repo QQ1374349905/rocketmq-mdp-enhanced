@@ -1,8 +1,8 @@
 package com.gaoji.common.mdp.example.client;
 
-import com.gaoji.common.mdp.enhanced.annotation.MdpClient;
-import com.gaoji.common.mdp.enhanced.annotation.MdpMethod;
-import com.gaoji.common.mdp.enhanced.enums.DelayLevel;
+import com.rocketmq.mdp.enhanced.annotation.MdpClient;
+import com.rocketmq.mdp.enhanced.annotation.MdpMethod;
+import com.rocketmq.mdp.enhanced.enums.DelayLevel;
 import com.gaoji.common.mdp.example.domain.OrderInfo;
 
 /**

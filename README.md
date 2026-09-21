@@ -73,8 +73,8 @@ rocketmq:
 ### 1. 定义生产者（Producer）
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.MdpClient;
-import com.gaoji.common.mdp.enhanced.annotation.MdpMethod;
+import annotation.rocketmq.mdp.enhanced.MdpClient;
+import annotation.rocketmq.mdp.enhanced.MdpMethod;
 import com.gaoji.common.mdp.enhanced.annotation.MdpMethodEnhanced;
 
 /**
@@ -141,7 +141,7 @@ public class OrderService {
 ### 3. 定义消费者（Consumer）
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
+import annotation.rocketmq.mdp.enhanced.MdpServer;
 import org.springframework.stereotype.Component;
 
 /**
@@ -206,7 +206,7 @@ public class OrderConsumer {
 增强版MDP支持消息幂等性保证，防止重复消费：
 
 ```java
-import com.gaoji.common.mdp.enhanced.annotation.Idempotent;
+import annotation.rocketmq.mdp.enhanced.Idempotent;
 
 @Component
 @MdpServer(service = "order.service")

@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.enhanced.idempotent;
+package com.rocketmq.mdp.enhanced.idempotent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

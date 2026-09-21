@@ -1,7 +1,7 @@
-package com.gaoji.common.mdp.enhanced.config;
+package com.rocketmq.mdp.enhanced.config;
 
-import com.gaoji.common.mdp.enhanced.register.MdpClientClassRegister;
-import com.gaoji.common.mdp.enhanced.register.MdpServerClassRegister;
+import com.rocketmq.mdp.enhanced.register.MdpClientClassRegister;
+import com.rocketmq.mdp.enhanced.register.MdpServerClassRegister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

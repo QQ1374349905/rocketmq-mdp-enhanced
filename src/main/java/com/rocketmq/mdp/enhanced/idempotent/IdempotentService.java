@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.enhanced.idempotent;
+package com.rocketmq.mdp.enhanced.idempotent;
 
 /**
  * 幂等性服务接口

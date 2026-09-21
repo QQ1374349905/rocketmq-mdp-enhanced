@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.enhanced.enums;
+package com.rocketmq.mdp.enhanced.enums;
 
 /**
  * RocketMQ延迟消息级别枚举

@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.enhanced.converter;
+package com.rocketmq.mdp.enhanced.converter;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,7 +1,7 @@
 package com.gaoji.common.mdp.example.server;
 
-import com.gaoji.common.mdp.enhanced.annotation.Idempotent;
-import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
+import com.rocketmq.mdp.enhanced.annotation.Idempotent;
+import com.rocketmq.mdp.enhanced.annotation.MdpServer;
 import com.gaoji.common.mdp.example.domain.OrderInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

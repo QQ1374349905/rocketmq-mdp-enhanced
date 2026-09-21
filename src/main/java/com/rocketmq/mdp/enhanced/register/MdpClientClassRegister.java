@@ -1,8 +1,8 @@
-package com.gaoji.common.mdp.enhanced.register;
+package com.rocketmq.mdp.enhanced.register;
 
-import com.gaoji.common.mdp.enhanced.annotation.EnableMdp;
-import com.gaoji.common.mdp.enhanced.annotation.MdpClient;
-import com.gaoji.common.mdp.enhanced.generator.MdpInterfaceGenerator;
+import com.rocketmq.mdp.enhanced.annotation.EnableMdp;
+import com.rocketmq.mdp.enhanced.annotation.MdpClient;
+import com.rocketmq.mdp.enhanced.generator.MdpInterfaceGenerator;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
 import org.slf4j.Logger;
