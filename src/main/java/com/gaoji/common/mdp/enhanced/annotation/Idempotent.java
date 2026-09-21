@@ -40,8 +40,10 @@ public @interface Idempotent {
      * - "#order.orderId" - 提取订单ID
      * - "#user.userId" - 提取用户ID
      * - "#order.orderId + '_' + #order.userId" - 组合键
+     *
+     * 如果不指定（默认为空字符串），则自动使用参数的 MD5 值作为业务键
      */
-    String keyExpression();
+    String keyExpression() default "";
 
     /**
      * 去重记录过期时间（秒）

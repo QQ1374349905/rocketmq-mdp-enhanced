@@ -68,6 +68,24 @@ public class OrderMdpServer {
         processOrder(order, "VIP消息");
     }
 
+    /**
+     * 普通消息处理方法（使用默认 MD5 模式）
+     *
+     * 不指定 keyExpression 时，框架会自动：
+     * 1. 将参数对象序列化为 JSON
+     * 2. 计算 JSON 的 MD5 值作为业务键
+     * 3. 基于 MD5 进行幂等性去重
+     *
+     * 适用场景：
+     * - 消息没有明确的业务唯一键
+     * - 完全基于消息内容去重
+     */
+    @Idempotent  // 默认使用参数的 MD5 值
+    public void sendNotification(OrderInfo order) {
+        logger.info("收到通知消息: {}", order);
+        logger.info("发送通知给用户: userId={}, orderId={}", order.getUserId(), order.getOrderId());
+    }
+
     private void processOrder(OrderInfo order, String messageType) {
         try {
             logger.info("开始处理订单 [{}]: orderId={}, userId={}, productName={}, amount={}",

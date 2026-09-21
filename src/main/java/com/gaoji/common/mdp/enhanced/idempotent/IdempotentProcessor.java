@@ -1,5 +1,6 @@
 package com.gaoji.common.mdp.enhanced.idempotent;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gaoji.common.mdp.enhanced.annotation.Idempotent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,6 +10,8 @@ import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * 幂等性处理器
@@ -23,6 +26,7 @@ public class IdempotentProcessor {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotentProcessor.class);
     private static final ExpressionParser parser = new SpelExpressionParser();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final IdempotentService idempotentService;
 
@@ -130,9 +134,16 @@ public class IdempotentProcessor {
 
     /**
      * 使用SpEL表达式从参数中提取业务唯一键
+     * 如果未指定表达式，则使用参数的 MD5 值
      */
     private String extractBusinessKey(String expression, Method method, Object parameter) {
         try {
+            // 如果未指定表达式，使用参数的 MD5 值
+            if (expression == null || expression.trim().isEmpty()) {
+                return calculateMd5(parameter);
+            }
+
+            // 使用 SpEL 表达式提取业务键
             EvaluationContext context = new StandardEvaluationContext();
 
             if (method.getParameterCount() > 0) {
@@ -146,6 +157,53 @@ public class IdempotentProcessor {
         } catch (Exception e) {
             log.error("提取业务唯一键失败 - expression: {}, parameter: {}", expression, parameter, e);
             return null;
+        }
+    }
+
+    /**
+     * 计算对象的 MD5 值
+     * 使用 JSON 序列化来保证相同内容的对象生成相同的 MD5
+     */
+    private String calculateMd5(Object parameter) {
+        try {
+            String content;
+
+            // 基本类型直接 toString
+            if (parameter == null) {
+                content = "null";
+            } else if (parameter instanceof String ||
+                       parameter instanceof Number ||
+                       parameter instanceof Boolean) {
+                content = parameter.toString();
+            } else {
+                // 对象类型使用 JSON 序列化
+                content = objectMapper.writeValueAsString(parameter);
+            }
+
+            MessageDigest md = MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(content.getBytes(StandardCharsets.UTF_8));
+
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : digest) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+
+            String md5 = hexString.toString();
+            log.debug("计算参数 MD5 - type: {}, md5: {}",
+                    parameter != null ? parameter.getClass().getSimpleName() : "null", md5);
+            return md5;
+
+        } catch (Exception e) {
+            log.error("计算 MD5 失败 - parameter: {}", parameter, e);
+            // 降级方案：使用类名 + hashCode（仅用于兜底，不保证内容相同）
+            String fallback = (parameter != null ? parameter.getClass().getName() : "null") + ":" +
+                            (parameter != null ? parameter.hashCode() : 0);
+            log.warn("使用降级方案生成业务键 - fallback: {}", fallback);
+            return String.valueOf(fallback.hashCode());
         }
     }
 
