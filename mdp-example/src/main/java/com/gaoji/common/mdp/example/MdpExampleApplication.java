@@ -1,6 +1,6 @@
 package com.gaoji.common.mdp.example;
 
-import com.gaoji.common.mdp.enhanced.annotation.EnableMdp;
+import com.rocketmq.mdp.enhanced.annotation.EnableMdp;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

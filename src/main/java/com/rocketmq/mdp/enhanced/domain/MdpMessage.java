@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.enhanced.domain;
+package com.rocketmq.mdp.enhanced.domain;
 
 import java.io.Serializable;
 

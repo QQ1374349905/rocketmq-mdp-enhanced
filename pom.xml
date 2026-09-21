@@ -5,11 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.gaoji</groupId>
-    <artifactId>gaoji-common-mdp-enhanced</artifactId>
+    <artifactId>rocketmq-mdp-enhanced</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>gaoji-common-mdp-enhanced</name>
+    <name>rocketmq-mdp-enhanced</name>
     <description>Enhanced MDP with delayed messages and flexible parameter conversion</description>
 
     <properties>

@@ -1,9 +1,9 @@
-package com.gaoji.common.mdp.enhanced.consumer;
+package com.rocketmq.mdp.enhanced.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gaoji.common.mdp.enhanced.converter.ParameterConverter;
-import com.gaoji.common.mdp.enhanced.domain.MdpMessage;
-import com.gaoji.common.mdp.enhanced.idempotent.IdempotentProcessor;
+import com.rocketmq.mdp.enhanced.converter.ParameterConverter;
+import com.rocketmq.mdp.enhanced.domain.MdpMessage;
+import com.rocketmq.mdp.enhanced.idempotent.IdempotentProcessor;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyContext;
 import org.apache.rocketmq.client.consumer.listener.ConsumeConcurrentlyStatus;
 import org.apache.rocketmq.client.consumer.listener.MessageListenerConcurrently;

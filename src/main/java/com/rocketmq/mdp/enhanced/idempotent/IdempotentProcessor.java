@@ -1,7 +1,7 @@
-package com.gaoji.common.mdp.enhanced.idempotent;
+package com.rocketmq.mdp.enhanced.idempotent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.gaoji.common.mdp.enhanced.annotation.Idempotent;
+import com.rocketmq.mdp.enhanced.annotation.Idempotent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -1,9 +1,9 @@
-package com.gaoji.common.mdp.enhanced.config;
+package com.rocketmq.mdp.enhanced.config;
 
-import com.gaoji.common.mdp.enhanced.idempotent.IdempotentProcessor;
-import com.gaoji.common.mdp.enhanced.idempotent.IdempotentService;
-import com.gaoji.common.mdp.enhanced.idempotent.MemoryIdempotentService;
-import com.gaoji.common.mdp.enhanced.idempotent.RedisIdempotentService;
+import com.rocketmq.mdp.enhanced.idempotent.IdempotentProcessor;
+import com.rocketmq.mdp.enhanced.idempotent.IdempotentService;
+import com.rocketmq.mdp.enhanced.idempotent.MemoryIdempotentService;
+import com.rocketmq.mdp.enhanced.idempotent.RedisIdempotentService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
