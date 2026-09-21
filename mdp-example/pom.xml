@@ -4,13 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.rocketmq</groupId>
-    <artifactId>rocketmq-mdp-enhanced</artifactId>
+    <groupId>com.example</groupId>
+    <artifactId>mdp-example</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>rocketmq-mdp-enhanced</name>
-    <description>RocketMQ 消息驱动编程框架，支持延迟消息、灵活参数转换和幂等性保证</description>
+    <name>mdp-example</name>
+    <description>MDP 框架示例应用</description>
 
     <properties>
         <java.version>1.8</java.version>
@@ -18,67 +18,42 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <spring-boot.version>2.3.12.RELEASE</spring-boot.version>
-        <spring.version>5.2.15.RELEASE</spring.version>
-        <rocketmq.version>4.9.4</rocketmq.version>
-        <jackson.version>2.11.4</jackson.version>
-        <slf4j.version>1.7.30</slf4j.version>
-        <junit.version>4.13.2</junit.version>
     </properties>
 
     <dependencies>
-        <!-- Spring Boot -->
+        <!-- 依赖 MDP 框架 -->
+        <dependency>
+            <groupId>com.rocketmq</groupId>
+            <artifactId>rocketmq-mdp-enhanced</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+
+        <!-- Spring Boot Starter -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>
             <version>${spring-boot.version}</version>
-            <scope>provided</scope>
         </dependency>
 
-        <!-- RocketMQ -->
-        <dependency>
-            <groupId>org.apache.rocketmq</groupId>
-            <artifactId>rocketmq-client</artifactId>
-            <version>${rocketmq.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
+        <!-- RocketMQ Spring Boot Starter -->
         <dependency>
             <groupId>org.apache.rocketmq</groupId>
             <artifactId>rocketmq-spring-boot-starter</artifactId>
             <version>2.2.1</version>
-            <scope>provided</scope>
         </dependency>
 
-        <!-- Jackson for JSON -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- SLF4J -->
-        <dependency>
-            <groupId>org.slf4j</groupId>
-            <artifactId>slf4j-api</artifactId>
-            <version>${slf4j.version}</version>
-            <scope>provided</scope>
-        </dependency>
-
-        <!-- Spring Data Redis (可选，用于幂等性保证) -->
+        <!-- Spring Data Redis (用于幂等性) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-redis</artifactId>
             <version>${spring-boot.version}</version>
-            <optional>true</optional>
         </dependency>
 
-        <!-- Commons Pool2 (required for Redis connection pooling) -->
+        <!-- Commons Pool2 (Redis 连接池) -->
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-pool2</artifactId>
             <version>2.9.0</version>
-            <optional>true</optional>
         </dependency>
 
         <!-- Test Dependencies -->
@@ -87,33 +62,45 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <version>${spring-boot.version}</version>
             <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.junit.vintage</groupId>
-                    <artifactId>junit-vintage-engine</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>${junit.version}</version>
+            <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
 
     <build>
         <plugins>
+            <!-- Maven Compiler Plugin: 保留参数名以支持 SpEL 表达式 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
                 <configuration>
-                    <source>1.8</source>
-                    <target>1.8</target>
-                    <encoding>UTF-8</encoding>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>${project.build.sourceEncoding}</encoding>
+                    <!-- 保留参数名，用于 @Idempotent 注解的 SpEL 表达式解析 -->
+                    <compilerArgs>
+                        <arg>-parameters</arg>
+                    </compilerArgs>
                 </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>${spring-boot.version}</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
