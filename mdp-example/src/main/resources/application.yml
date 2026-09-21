@@ -12,10 +12,18 @@ spring:
     timeout: 5000ms
     lettuce:
       pool:
-        max-active: 8      # 连接池最大连接数
+        max-active: 16     # 连接池最大连接数（从8增加到16，支持更高并发）
         max-idle: 8        # 连接池最大空闲连接数
-        min-idle: 0        # 连接池最小空闲连接数
-        max-wait: -1ms     # 连接池最大阻塞等待时间
+        min-idle: 2        # 连接池最小空闲连接数（从0增加到2，保持热连接）
+        max-wait: 3000ms   # 连接池最大阻塞等待时间（从-1改为3秒，避免无限等待）
+      shutdown-timeout: 100ms
+
+# MDP 增强版配置
+mdp:
+  idempotent:
+    enabled: true        # 是否启用幂等性（默认true）
+    ttl: 86400           # 幂等性记录过期时间（秒），默认24小时，避免Redis无限增长
+    lock-timeout: 10     # 分布式锁超时时间（秒），默认10秒
 
 # RocketMQ Configuration
 rocketmq:
@@ -27,7 +35,7 @@ logging:
     root: INFO
     com.gaoji.common.mdp: DEBUG
     org.apache.rocketmq: WARN
-    org.springframework.data.redis: DEBUG
-    io.lettuce.core: DEBUG
+    org.springframework.data.redis: INFO  # 从DEBUG改为INFO，减少Redis连接日志
+    io.lettuce.core: INFO                  # 从DEBUG改为INFO，减少连接池日志
   pattern:
     console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n'

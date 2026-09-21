@@ -5,9 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * 基于 Redis 的幂等性服务实现
@@ -22,6 +23,7 @@ import java.util.concurrent.TimeUnit;
  * - 自动过期（TTL）
  * - 高性能（Redis 内存操作）
  * - 高可用（Redis 集群/哨兵）
+ * - 支持自定义TTL配置
  * <p>
  * Redis Key 设计：
  * - 去重记录: mdp:idempotent:{businessKey} -> {messageId}
@@ -36,8 +38,26 @@ public class RedisIdempotentService implements IdempotentService {
 
     private final RedisTemplate<String, String> redisTemplate;
 
+    /**
+     * 默认TTL（秒）- 可通过配置修改
+     */
+    private long defaultTtl = 86400L; // 24小时
+
+    /**
+     * 默认锁超时（秒）- 可通过配置修改
+     */
+    private long defaultLockTimeout = 10L; // 10秒
+
     public RedisIdempotentService(RedisTemplate<String, String> redisTemplate) {
         this.redisTemplate = redisTemplate;
+    }
+
+    public void setDefaultTtl(long defaultTtl) {
+        this.defaultTtl = defaultTtl;
+    }
+
+    public void setDefaultLockTimeout(long defaultLockTimeout) {
+        this.defaultLockTimeout = defaultLockTimeout;
     }
 
     @Override
@@ -46,35 +66,69 @@ public class RedisIdempotentService implements IdempotentService {
         String lockKey = LOCK_KEY_PREFIX + businessKey;
         String lockValue = messageId + ":" + System.currentTimeMillis();
 
+        // 使用配置的默认值（如果参数未指定）
+        long actualTimeout = timeout > 0 ? timeout : defaultTtl;
+        long actualLockTimeout = lockTimeout > 0 ? lockTimeout : defaultLockTimeout;
+
         try {
-            // 1. 尝试获取分布式锁
-            Boolean lockAcquired = redisTemplate.opsForValue()
-                    .setIfAbsent(lockKey, lockValue, lockTimeout, TimeUnit.SECONDS);
+            // 优化：使用Lua脚本一次性完成检查和设置，减少网络往返
+            String luaScript =
+                    "local lockKey = KEYS[1] " +
+                            "local idempotentKey = KEYS[2] " +
+                            "local lockValue = ARGV[1] " +
+                            "local messageId = ARGV[2] " +
+                            "local lockTimeout = tonumber(ARGV[3]) " +
+                            "local idempotentTimeout = tonumber(ARGV[4]) " +
+                            "" +
+                            "-- 1. 尝试获取分布式锁 " +
+                            "local lockAcquired = redis.call('SET', lockKey, lockValue, 'NX', 'EX', lockTimeout) " +
+                            "if not lockAcquired then " +
+                            "    return {0, 'lock_failed', ''} " +
+                            "end " +
+                            "" +
+                            "-- 2. 检查是否已处理 " +
+                            "local existingMessageId = redis.call('GET', idempotentKey) " +
+                            "if existingMessageId then " +
+                            "    -- 释放锁 " +
+                            "    redis.call('DEL', lockKey) " +
+                            "    return {0, 'duplicate', existingMessageId} " +
+                            "end " +
+                            "" +
+                            "-- 3. 记录处理标识 " +
+                            "redis.call('SET', idempotentKey, messageId, 'EX', idempotentTimeout) " +
+                            "" +
+                            "-- 4. 释放锁（原子操作） " +
+                            "redis.call('DEL', lockKey) " +
+                            "" +
+                            "return {1, 'success', ''}";
 
-            if (!Boolean.TRUE.equals(lockAcquired)) {
-                log.warn("获取分布式锁失败，可能存在并发消费 - businessKey: {}, messageId: {}", businessKey, messageId);
-                return false;
-            }
+            DefaultRedisScript<List> script = new DefaultRedisScript<>(luaScript, List.class);
+            List result = redisTemplate.execute(
+                    script,
+                    Arrays.asList(lockKey, idempotentKey),
+                    lockValue, messageId, String.valueOf(actualLockTimeout), String.valueOf(actualTimeout)
+            );
 
-            try {
-                // 2. 检查是否已处理
-                String existingMessageId = redisTemplate.opsForValue().get(idempotentKey);
-                if (existingMessageId != null) {
+            if (result.size() >= 3) {
+                int success = ((Number) result.get(0)).intValue();
+                String status = (String) result.get(1);
+                String existingMessageId = (String) result.get(2);
+
+                if (success == 1) {
+                    log.debug("开始处理消息 - businessKey: {}, messageId: {}, timeout: {}s",
+                            businessKey, messageId, actualTimeout);
+                    return true;
+                } else if ("duplicate".equals(status)) {
                     log.warn("检测到重复消息 - businessKey: {}, 原始messageId: {}, 当前messageId: {}",
                             businessKey, existingMessageId, messageId);
                     return false;
+                } else {
+                    log.warn("获取分布式锁失败，可能存在并发消费 - businessKey: {}, messageId: {}", businessKey, messageId);
+                    return false;
                 }
-
-                // 3. 记录处理标识
-                redisTemplate.opsForValue().set(idempotentKey, messageId, timeout, TimeUnit.SECONDS);
-                log.debug("开始处理消息 - businessKey: {}, messageId: {}, timeout: {}s",
-                        businessKey, messageId, timeout);
-                return true;
-
-            } finally {
-                // 4. 释放分布式锁（使用 Lua 脚本保证原子性）
-                releaseLock(lockKey, lockValue);
             }
+
+            return false;
 
         } catch (Exception e) {
             log.error("幂等性检查失败 - businessKey: {}, messageId: {}", businessKey, messageId, e);
