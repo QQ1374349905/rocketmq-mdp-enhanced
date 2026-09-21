@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -18,18 +19,18 @@ import org.springframework.scheduling.annotation.Scheduled;
 
 /**
  * 幂等性配置类
- *
+ * <p>
  * 提供幂等性服务的自动配置
- *
+ * <p>
  * 自动选择实现：
  * 1. 如果存在 RedisTemplate Bean → 使用 RedisIdempotentService（推荐）
  * 2. 否则 → 使用 MemoryIdempotentService（仅适合单机/测试）
- *
+ * <p>
  * 使用说明：
  * - 生产环境：配置 Redis，自动使用 RedisIdempotentService
  * - 开发/测试：不配置 Redis，自动使用 MemoryIdempotentService
  * - 自定义实现：定义自己的 IdempotentService Bean，自动覆盖默认实现
- *
+ * <p>
  * Redis 配置示例（application.yml）：
  * <pre>
  * spring:
@@ -44,10 +45,18 @@ import org.springframework.scheduling.annotation.Scheduled;
  *         max-active: 8
  *         max-idle: 8
  *         min-idle: 0
+ *
+ * # 幂等性配置（可选）
+ * mdp:
+ *   idempotent:
+ *     ttl: 86400          # 记录过期时间（秒），默认24小时
+ *     lock-timeout: 10    # 分布式锁超时（秒），默认10秒
+ *     enabled: true       # 是否启用幂等性，默认true
  * </pre>
  */
 @Configuration
 @EnableScheduling
+@EnableConfigurationProperties(IdempotentProperties.class)
 public class IdempotentConfig {
 
     private static final Logger log = LoggerFactory.getLogger(IdempotentConfig.class);
@@ -63,10 +72,16 @@ public class IdempotentConfig {
     @ConditionalOnClass(RedisConnectionFactory.class)
     @ConditionalOnBean(RedisConnectionFactory.class)
     @ConditionalOnMissingBean(IdempotentService.class)
-    public IdempotentService redisIdempotentService(StringRedisTemplate stringRedisTemplate) {
+    public IdempotentService redisIdempotentService(StringRedisTemplate stringRedisTemplate,
+                                                    IdempotentProperties properties) {
         log.info("初始化幂等性服务 - 使用 Redis 实现（RedisIdempotentService）");
         log.info("✅ Redis 实现支持分布式部署，适合生产环境");
-        IdempotentService service = new RedisIdempotentService(stringRedisTemplate);
+        log.info("配置参数 - TTL: {}秒, LockTimeout: {}秒", properties.getTtl(), properties.getLockTimeout());
+
+        RedisIdempotentService service = new RedisIdempotentService(stringRedisTemplate);
+        service.setDefaultTtl(properties.getTtl());
+        service.setDefaultLockTimeout(properties.getLockTimeout());
+
         this.idempotentService = service;
         return service;
     }
