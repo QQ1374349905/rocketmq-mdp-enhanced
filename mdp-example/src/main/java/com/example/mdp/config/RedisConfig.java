@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.example.config;
+package com.example.mdp.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

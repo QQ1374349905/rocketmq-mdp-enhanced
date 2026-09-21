@@ -1,9 +1,9 @@
-package com.gaoji.common.mdp.example.client;
+package com.example.mdp.client;
 
 import com.rocketmq.mdp.enhanced.annotation.MdpClient;
 import com.rocketmq.mdp.enhanced.annotation.MdpMethod;
 import com.rocketmq.mdp.enhanced.enums.DelayLevel;
-import com.gaoji.common.mdp.example.domain.OrderInfo;
+import com.example.mdp.domain.OrderInfo;
 
 /**
  * 订单MDP生产者接口示例

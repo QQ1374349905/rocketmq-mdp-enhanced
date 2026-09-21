@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.example.domain;
+package com.example.mdp.domain;
 
 import java.io.Serializable;
 

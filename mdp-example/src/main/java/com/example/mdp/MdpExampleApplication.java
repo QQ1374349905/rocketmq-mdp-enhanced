@@ -1,4 +1,4 @@
-package com.gaoji.common.mdp.example;
+package com.example.mdp;
 
 import com.rocketmq.mdp.enhanced.annotation.EnableMdp;
 import org.springframework.boot.SpringApplication;

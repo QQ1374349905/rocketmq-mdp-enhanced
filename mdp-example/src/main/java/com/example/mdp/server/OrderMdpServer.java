@@ -1,8 +1,8 @@
-package com.gaoji.common.mdp.example.server;
+package com.example.mdp.server;
 
 import com.rocketmq.mdp.enhanced.annotation.Idempotent;
 import com.rocketmq.mdp.enhanced.annotation.MdpServer;
-import com.gaoji.common.mdp.example.domain.OrderInfo;
+import com.example.mdp.domain.OrderInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -31,9 +31,8 @@ public class OrderMdpServer {
      * 方法名必须与客户端接口方法名一致
      *
      * 幂等性保证:
-     * - keyExpression = "#order.orderId" 使用订单ID作为业务唯一键
+     * - key = "orderId" 使用订单ID作为业务唯一键
      * - timeout = 86400 去重记录保留24小时
-     * - duplicateStrategy = SKIP 重复消息直接跳过，返回消费成功
      */
     @Idempotent(key = "orderId", timeout = 86400)
     public void sendOrder(OrderInfo order) {
@@ -71,7 +70,7 @@ public class OrderMdpServer {
     /**
      * 普通消息处理方法（使用默认 MD5 模式）
      *
-     * 不指定 keyExpression 时，框架会自动：
+     * 不指定 key 时，框架会自动：
      * 1. 将参数对象序列化为 JSON
      * 2. 计算 JSON 的 MD5 值作为业务键
      * 3. 基于 MD5 进行幂等性去重
