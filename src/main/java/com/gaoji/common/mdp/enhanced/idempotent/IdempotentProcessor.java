@@ -144,11 +144,23 @@ public class IdempotentProcessor {
             }
 
             // 使用 SpEL 表达式提取业务键
-            EvaluationContext context = new StandardEvaluationContext();
+            StandardEvaluationContext context = new StandardEvaluationContext();
 
             if (method.getParameterCount() > 0) {
+                // 获取参数名（可能是真实名称如 "order"，也可能是编译后的 "arg0"）
                 String paramName = getParameterName(method, 0);
                 context.setVariable(paramName, parameter);
+
+                // 如果是 argN 格式，尝试从表达式中提取期望的参数名
+                // 例如：表达式 "#order.orderId" 期望参数名是 "order"
+                if (paramName.startsWith("arg") && expression.startsWith("#")) {
+                    String expectedParamName = extractVariableFromExpression(expression);
+                    if (expectedParamName != null && !expectedParamName.equals(paramName)) {
+                        // 同时注册期望的参数名，兼容编译时未保留参数名的情况
+                        context.setVariable(expectedParamName, parameter);
+                        log.debug("参数名降级 - 编译名: {}, 期望名: {}", paramName, expectedParamName);
+                    }
+                }
             }
 
             Object value = parser.parseExpression(expression).getValue(context);
@@ -215,6 +227,33 @@ public class IdempotentProcessor {
             return method.getParameters()[index].getName();
         } catch (Exception e) {
             return "arg" + index;
+        }
+    }
+
+    /**
+     * 从 SpEL 表达式中提取变量名
+     * 例如：#order.orderId -> order
+     *       #user.id -> user
+     */
+    private String extractVariableFromExpression(String expression) {
+        try {
+            if (expression == null || !expression.startsWith("#")) {
+                return null;
+            }
+
+            // 移除开头的 #
+            String withoutHash = expression.substring(1);
+
+            // 找到第一个 . 的位置
+            int dotIndex = withoutHash.indexOf('.');
+            if (dotIndex > 0) {
+                return withoutHash.substring(0, dotIndex);
+            }
+
+            // 没有 . 则返回整个变量名
+            return withoutHash;
+        } catch (Exception e) {
+            return null;
         }
     }
 
