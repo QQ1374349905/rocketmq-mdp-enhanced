@@ -12,8 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
@@ -56,40 +55,15 @@ public class IdempotentConfig {
     private IdempotentService idempotentService;
 
     /**
-     * 创建 String 类型的 RedisTemplate
-     * 仅当存在 RedisConnectionFactory 时创建
+     * Redis 幂等性服务 Bean（优先级高）
+     * 当存在 RedisConnectionFactory 时自动配置
+     * 直接使用 Spring Boot 自动配置的 StringRedisTemplate
      */
     @Bean
     @ConditionalOnClass(RedisConnectionFactory.class)
     @ConditionalOnBean(RedisConnectionFactory.class)
-    @ConditionalOnMissingBean(name = "stringRedisTemplate")
-    public RedisTemplate<String, String> stringRedisTemplate(RedisConnectionFactory connectionFactory) {
-        log.info("初始化 StringRedisTemplate 用于幂等性服务");
-
-        RedisTemplate<String, String> template = new RedisTemplate<>();
-        template.setConnectionFactory(connectionFactory);
-
-        // 使用 String 序列化器
-        StringRedisSerializer serializer = new StringRedisSerializer();
-        template.setKeySerializer(serializer);
-        template.setValueSerializer(serializer);
-        template.setHashKeySerializer(serializer);
-        template.setHashValueSerializer(serializer);
-
-        template.afterPropertiesSet();
-
-        log.info("✅ StringRedisTemplate 初始化完成");
-        return template;
-    }
-
-    /**
-     * Redis 幂等性服务 Bean（优先级高）
-     * 当存在 RedisTemplate<String, String> 时自动配置
-     */
-    @Bean
-    @ConditionalOnBean(name = "stringRedisTemplate")
     @ConditionalOnMissingBean(IdempotentService.class)
-    public IdempotentService redisIdempotentService(RedisTemplate<String, String> stringRedisTemplate) {
+    public IdempotentService redisIdempotentService(StringRedisTemplate stringRedisTemplate) {
         log.info("初始化幂等性服务 - 使用 Redis 实现（RedisIdempotentService）");
         log.info("✅ Redis 实现支持分布式部署，适合生产环境");
         IdempotentService service = new RedisIdempotentService(stringRedisTemplate);

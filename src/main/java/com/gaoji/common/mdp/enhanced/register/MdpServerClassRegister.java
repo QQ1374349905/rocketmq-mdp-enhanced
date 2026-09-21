@@ -2,6 +2,7 @@ package com.gaoji.common.mdp.enhanced.register;
 
 import com.gaoji.common.mdp.enhanced.annotation.MdpServer;
 import com.gaoji.common.mdp.enhanced.consumer.MdpMessageListener;
+import com.gaoji.common.mdp.enhanced.idempotent.IdempotentProcessor;
 import org.apache.rocketmq.client.consumer.DefaultMQPushConsumer;
 import org.apache.rocketmq.client.exception.MQClientException;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
@@ -9,6 +10,7 @@ import org.apache.rocketmq.common.protocol.heartbeat.MessageModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
@@ -34,6 +36,9 @@ public class MdpServerClassRegister implements BeanPostProcessor, ApplicationCon
     private ApplicationContext applicationContext;
     private Environment environment;
     private final Map<String, DefaultMQPushConsumer> consumerMap = new ConcurrentHashMap<>();
+
+    @Autowired(required = false)
+    private IdempotentProcessor idempotentProcessor;
 
     @Override
     public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
@@ -89,17 +94,17 @@ public class MdpServerClassRegister implements BeanPostProcessor, ApplicationCon
                 consumer.setMessageModel(MessageModel.CLUSTERING);
             }
 
-            // 注册消息监听器（不再预先查找方法，由监听器根据消息中的方法名动态查找）
+            // 注册消息监听器（传入幂等性处理器）
             MdpMessageListener listener = new MdpMessageListener(
-                    bean, null, annotation.flexibleConversion());
+                    bean, null, annotation.flexibleConversion(), idempotentProcessor);
             consumer.registerMessageListener(listener);
 
             // 启动消费者
             consumer.start();
             consumerMap.put(service, consumer);
 
-            log.info("注册增强版MDP消费者成功 - Service: {}, Topic: {}, Group: {}, FlexibleConversion: {}",
-                    service, topic, group, annotation.flexibleConversion());
+            log.info("注册增强版MDP消费者成功 - Service: {}, Topic: {}, Group: {}, FlexibleConversion: {}, IdempotentEnabled: {}",
+                    service, topic, group, annotation.flexibleConversion(), (idempotentProcessor != null));
         } catch (MQClientException e) {
             log.error("注册消费者失败 - Service: {}, Error: {}", service, e.getMessage(), e);
             throw new RuntimeException("注册消费者失败: " + service, e);
