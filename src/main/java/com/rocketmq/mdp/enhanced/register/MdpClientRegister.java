@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 增强版MDP生产者注册器
- * 自动扫描 @MdpCEnhanced 接口，生成代理实现并注册为Spring Bean
+ * 自动扫描 @MdpClient 接口，生成代理实现并注册为Spring Bean
  * 支持自动生成topic
  */
 @Component

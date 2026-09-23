@@ -9,13 +9,13 @@ import java.lang.annotation.*;
  * 用法：标注在接口上，框架会自动生成实现类
  *
  * 示例:
- * @MdpCEnhanced(service = "nldb.trade.order.ret")
+ * @MdpClient(service = "nldb.trade.order.ret")
  * public interface OrderRetMdp {
- *     @MdpMethodEnhanced(isSync = false)
+ *     @MdpMethod(isSync = false)
  *     void onMessage(TradeMqResponse response);
  *
- *     @MdpMethodEnhanced(isSync = false, supportDelay = true)
- *     void onMessageDelayed(TradeMqResponse response, int delayLevel);
+ *     @MdpMethod(isSync = false, delayLevel = DelayLevel.SECONDS_10)
+ *     void onMessageDelayed(TradeMqResponse response);
  * }
  */
 @Target(ElementType.TYPE)

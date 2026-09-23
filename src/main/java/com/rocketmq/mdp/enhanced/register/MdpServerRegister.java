@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 增强版MDP消费者注册器
- * 自动扫描 @MdpSEnhanced 注解，注册RocketMQ消费者
+ * 自动扫描 @MdpServer 注解，注册RocketMQ消费者
  * 支持自动生成topic和group
  */
 @Component

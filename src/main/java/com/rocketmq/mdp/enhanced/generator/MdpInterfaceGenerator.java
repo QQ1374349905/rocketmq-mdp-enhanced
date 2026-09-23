@@ -6,6 +6,7 @@ import com.rocketmq.mdp.enhanced.annotation.MdpMethod;
 import com.rocketmq.mdp.enhanced.domain.MdpMessage;
 import com.rocketmq.mdp.enhanced.enums.DelayLevel;
 import org.apache.rocketmq.client.producer.DefaultMQProducer;
+import org.apache.rocketmq.client.producer.SendCallback;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.message.Message;
 import org.slf4j.Logger;
@@ -20,7 +21,7 @@ import java.util.UUID;
 
 /**
  * 增强版MDP接口代理生成器
- * 基于JDK动态代理，为 @MdpCEnhanced 接口生成实现类
+ * 基于JDK动态代理，为 @MdpClient 接口生成实现类
  * 支持延迟消息发送
  */
 public class MdpInterfaceGenerator {
@@ -39,7 +40,7 @@ public class MdpInterfaceGenerator {
     public static <T> T generateProxy(Class<T> interfaceClass, DefaultMQProducer producer) {
         MdpClient annotation = interfaceClass.getAnnotation(MdpClient.class);
         if (annotation == null) {
-            throw new IllegalArgumentException("接口必须标注 @MdpCEnhanced: " + interfaceClass.getName());
+            throw new IllegalArgumentException("接口必须标注 @MdpClient: " + interfaceClass.getName());
         }
 
         String service = annotation.service();
@@ -97,7 +98,7 @@ public class MdpInterfaceGenerator {
 
             MdpMethod methodAnnotation = method.getAnnotation(MdpMethod.class);
             if (methodAnnotation == null) {
-                throw new IllegalStateException("方法必须标注 @MdpMethodEnhanced: " + method.getName());
+                throw new IllegalStateException("方法必须标注 @MdpMethod: " + method.getName());
             }
 
             boolean isSync = methodAnnotation.isSync();
@@ -152,14 +153,38 @@ public class MdpInterfaceGenerator {
             }
 
             // 发送消息
-            SendResult result;
             if (isSync) {
-                result = producer.send(message, sendTimeout);
-                log.debug("消息发送成功 - MsgId: {}, Topic: {}", result.getMsgId(), topic);
+                SendResult result = producer.send(message, sendTimeout);
+                log.debug("同步消息发送成功 - MsgId: {}, Topic: {}", result.getMsgId(), topic);
                 return result;
             } else {
-                producer.send(message, sendTimeout);
-                return null;
+                // 异步发送，使用回调，并设置超时时间
+                // 注意：即使是异步发送，producer.send() 调用本身也可能立即抛出同步异常
+                // 例如：参数校验失败、序列化异常、producer未启动等
+                // 这些同步异常会直接抛给调用者，因为消息根本没有发送出去
+                try {
+                    producer.send(message, new SendCallback() {
+                        @Override
+                        public void onSuccess(SendResult sendResult) {
+                            log.debug("异步消息发送成功 - MsgId: {}, Topic: {}", sendResult.getMsgId(), topic);
+                        }
+
+                        @Override
+                        public void onException(Throwable e) {
+                            log.error("异步消息发送失败 - Topic: {}, MessageId: {}, 错误: {}",
+                                    topic, mdpMessage.getMessageId(), e.getMessage(), e);
+                        }
+                    }, sendTimeout);
+                    return null;
+                } catch (Exception e) {
+                    // 如果希望异步发送完全不抛异常，可以在这里捕获并记录日志
+                    log.error("异步消息提交失败（同步异常）- Topic: {}, MessageId: {}, 错误: {}",
+                            topic, mdpMessage.getMessageId(), e.getMessage(), e);
+                    // 选择1: 抛出异常，让调用者知道消息没发出去（推荐）
+                    throw e;
+                    // 选择2: 吞掉异常，返回null（不推荐，会导致消息丢失且调用者无感知）
+                    // return null;
+                }
             }
         }
     }
