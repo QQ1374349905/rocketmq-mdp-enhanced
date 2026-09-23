@@ -37,9 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 支持自动生成topic
  */
 @Component
-public class MdpClientClassRegister implements BeanDefinitionRegistryPostProcessor, ApplicationContextAware {
+public class MdpClientRegister implements BeanDefinitionRegistryPostProcessor, ApplicationContextAware {
 
-    private static final Logger log = LoggerFactory.getLogger(MdpClientClassRegister.class);
+    private static final Logger log = LoggerFactory.getLogger(MdpClientRegister.class);
 
     private ApplicationContext applicationContext;
     private final Map<String, DefaultMQProducer> producerMap = new ConcurrentHashMap<>();

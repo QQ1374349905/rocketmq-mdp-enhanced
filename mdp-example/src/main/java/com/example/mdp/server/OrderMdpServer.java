@@ -85,6 +85,34 @@ public class OrderMdpServer {
         logger.info("发送通知给用户: userId={}, orderId={}", order.getUserId(), order.getOrderId());
     }
 
+    /**
+     * 接收DTO订单消息（同步）- 测试跨包参数转换
+     * <p>
+     * 客户端发送: OrderDTO (com.example.mdp.dto.OrderDTO)
+     * 服务端接收: OrderInfo (com.example.mdp.domain.OrderInfo)
+     * <p>
+     * 框架会自动进行跨包类型转换:
+     * 1. 检测类名不匹配（OrderDTO vs OrderInfo）
+     * 2. 使用 ParameterConverter 基于字段名进行转换
+     * 3. 自动映射相同名称的字段
+     */
+    @Idempotent(key = "orderId")
+    public void sendOrderFromDto(OrderInfo order) {
+        logger.info("收到DTO转换订单消息（同步）: {}", order);
+        logger.info("  ✅ 成功将 OrderDTO (com.example.mdp.dto.OrderDTO) 转换为 OrderInfo");
+        processOrder(order, "DTO转换同步消息");
+    }
+
+    /**
+     * 接收DTO订单消息（异步）- 测试跨包参数转换
+     */
+    @Idempotent(key = "orderId")
+    public void sendOrderFromDtoAsync(OrderInfo order) {
+        logger.info("收到DTO转换订单消息（异步）: {}", order);
+        logger.info("  ✅ 成功将 OrderDTO (com.example.mdp.dto.OrderDTO) 转换为 OrderInfo");
+        processOrder(order, "DTO转换异步消息");
+    }
+
     private void processOrder(OrderInfo order, String messageType) {
         try {
             logger.info("开始处理订单 [{}]: orderId={}, userId={}, productName={}, amount={}",

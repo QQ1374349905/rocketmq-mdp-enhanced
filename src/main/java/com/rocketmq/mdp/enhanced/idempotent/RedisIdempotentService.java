@@ -2,7 +2,7 @@ package com.rocketmq.mdp.enhanced.idempotent;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 import java.util.Arrays;
@@ -36,7 +36,7 @@ public class RedisIdempotentService implements IdempotentService {
     private static final String IDEMPOTENT_KEY_PREFIX = "mdp:idempotent:";
     private static final String LOCK_KEY_PREFIX = "mdp:lock:";
 
-    private final RedisTemplate<String, String> redisTemplate;
+    private final StringRedisTemplate redisTemplate;
 
     /**
      * 默认TTL（秒）- 可通过配置修改
@@ -48,7 +48,7 @@ public class RedisIdempotentService implements IdempotentService {
      */
     private long defaultLockTimeout = 10L; // 10秒
 
-    public RedisIdempotentService(RedisTemplate<String, String> redisTemplate) {
+    public RedisIdempotentService(StringRedisTemplate redisTemplate) {
         this.redisTemplate = redisTemplate;
     }
 
@@ -71,48 +71,85 @@ public class RedisIdempotentService implements IdempotentService {
         long actualLockTimeout = lockTimeout > 0 ? lockTimeout : defaultLockTimeout;
 
         try {
+            // 测试：使用最简单的Lua脚本验证Redis连接
+            String testScript = "return {1, 'test', 'ok'}";
+            DefaultRedisScript<List> testScriptObj = new DefaultRedisScript<>(testScript, List.class);
+            List testResult = redisTemplate.execute(testScriptObj, Collections.emptyList());
+            log.info("测试Lua脚本 - result: {}", testResult);
+
             // 优化：使用Lua脚本一次性完成检查和设置，减少网络往返
+            // 注意：Lua脚本返回的数字类型会被序列化为Long，字符串保持为String
             String luaScript =
-                    "local lockKey = KEYS[1] " +
-                            "local idempotentKey = KEYS[2] " +
-                            "local lockValue = ARGV[1] " +
-                            "local messageId = ARGV[2] " +
-                            "local lockTimeout = tonumber(ARGV[3]) " +
-                            "local idempotentTimeout = tonumber(ARGV[4]) " +
-                            "" +
-                            "-- 1. 尝试获取分布式锁 " +
-                            "local lockAcquired = redis.call('SET', lockKey, lockValue, 'NX', 'EX', lockTimeout) " +
-                            "if not lockAcquired then " +
-                            "    return {0, 'lock_failed', ''} " +
-                            "end " +
-                            "" +
-                            "-- 2. 检查是否已处理 " +
-                            "local existingMessageId = redis.call('GET', idempotentKey) " +
-                            "if existingMessageId then " +
-                            "    -- 释放锁 " +
-                            "    redis.call('DEL', lockKey) " +
-                            "    return {0, 'duplicate', existingMessageId} " +
-                            "end " +
-                            "" +
-                            "-- 3. 记录处理标识 " +
-                            "redis.call('SET', idempotentKey, messageId, 'EX', idempotentTimeout) " +
-                            "" +
-                            "-- 4. 释放锁（原子操作） " +
-                            "redis.call('DEL', lockKey) " +
-                            "" +
-                            "return {1, 'success', ''}";
+                    "local lockKey = KEYS[1]\n" +
+                            "local idempotentKey = KEYS[2]\n" +
+                            "local lockValue = ARGV[1]\n" +
+                            "local messageId = ARGV[2]\n" +
+                            "local lockTimeout = tonumber(ARGV[3])\n" +
+                            "local idempotentTimeout = tonumber(ARGV[4])\n" +
+                            "\n" +
+                            "-- 1. 尝试获取分布式锁 (SETNX 返回 1 成功, 0 失败)\n" +
+                            "local lockAcquired = redis.call('SETNX', lockKey, lockValue)\n" +
+                            "if lockAcquired == 0 then\n" +
+                            "    return {'0', 'lock_failed', ''}\n" +
+                            "end\n" +
+                            "redis.call('EXPIRE', lockKey, lockTimeout)\n" +
+                            "\n" +
+                            "-- 2. 检查是否已处理\n" +
+                            "local existingMessageId = redis.call('GET', idempotentKey)\n" +
+                            "if existingMessageId then\n" +
+                            "    -- 释放锁\n" +
+                            "    redis.call('DEL', lockKey)\n" +
+                            "    return {'0', 'duplicate', existingMessageId}\n" +
+                            "end\n" +
+                            "\n" +
+                            "-- 3. 记录处理标识 (SETEX 更原子)\n" +
+                            "redis.call('SETEX', idempotentKey, idempotentTimeout, messageId)\n" +
+                            "\n" +
+                            "-- 4. 释放锁\n" +
+                            "redis.call('DEL', lockKey)\n" +
+                            "\n" +
+                            "return {'1', 'success', ''}";
+
+            // 调试：打印Lua脚本检查点
+            log.info("执行Lua脚本 - businessKey: {}, lockTimeout: {}, idempotentTimeout: {}",
+                    businessKey, actualLockTimeout, actualTimeout);
 
             DefaultRedisScript<List> script = new DefaultRedisScript<>(luaScript, List.class);
-            List result = redisTemplate.execute(
-                    script,
-                    Arrays.asList(lockKey, idempotentKey),
-                    lockValue, messageId, String.valueOf(actualLockTimeout), String.valueOf(actualTimeout)
-            );
 
-            if (result.size() >= 3) {
-                int success = ((Number) result.get(0)).intValue();
-                String status = (String) result.get(1);
-                String existingMessageId = (String) result.get(2);
+            // 添加详细的异常捕获
+            List result;
+            try {
+                result = redisTemplate.execute(
+                        script,
+                        Arrays.asList(lockKey, idempotentKey),
+                        lockValue, messageId, String.valueOf(actualLockTimeout), String.valueOf(actualTimeout)
+                );
+            } catch (Exception redisEx) {
+                log.error("Redis执行Lua脚本异常 - businessKey: {}, error: {}", businessKey, redisEx.getMessage(), redisEx);
+                throw redisEx;
+            }
+
+            // 调试日志：打印Lua脚本返回结果（包含类型信息）
+            log.info("Lua脚本返回结果 - businessKey: {}, result: {}, type: {}, size: {}",
+                    businessKey, result,
+                    result != null ? result.getClass().getName() : "null",
+                    result != null ? result.size() : "null");
+
+            // 打印每个元素的类型和值
+            if (result != null && !result.isEmpty()) {
+                for (int i = 0; i < result.size(); i++) {
+                    Object elem = result.get(i);
+                    log.info("  - result[{}]: value={}, type={}", i, elem, elem != null ? elem.getClass().getName() : "null");
+                }
+            }
+
+            if (result != null && result.size() >= 3) {
+                // Lua脚本返回的是字符串数组 ['1', 'success', ''] 或 ['0', 'duplicate', existingMessageId]
+                String successStr = String.valueOf(result.get(0));
+                String status = String.valueOf(result.get(1));
+                String existingMessageId = result.get(2) != null ? String.valueOf(result.get(2)) : "";
+
+                int success = "1".equals(successStr) ? 1 : 0;
 
                 if (success == 1) {
                     log.debug("开始处理消息 - businessKey: {}, messageId: {}, timeout: {}s",
@@ -126,10 +163,12 @@ public class RedisIdempotentService implements IdempotentService {
                     log.warn("获取分布式锁失败，可能存在并发消费 - businessKey: {}, messageId: {}", businessKey, messageId);
                     return false;
                 }
+            } else {
+                log.error("Lua脚本返回结果异常 - businessKey: {}, messageId: {}, result: {}",
+                        businessKey, messageId, result);
+                // 降级处理：允许继续处理
+                return true;
             }
-
-            return false;
-
         } catch (Exception e) {
             log.error("幂等性检查失败 - businessKey: {}, messageId: {}", businessKey, messageId, e);
             return false;

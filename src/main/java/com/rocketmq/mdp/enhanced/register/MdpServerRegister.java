@@ -28,9 +28,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 支持自动生成topic和group
  */
 @Component
-public class MdpServerClassRegister implements BeanPostProcessor, ApplicationContextAware {
+public class MdpServerRegister implements BeanPostProcessor, ApplicationContextAware {
 
-    private static final Logger log = LoggerFactory.getLogger(MdpServerClassRegister.class);
+    private static final Logger log = LoggerFactory.getLogger(MdpServerRegister.class);
 
     private ApplicationContext applicationContext;
     private Environment environment;

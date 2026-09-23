@@ -1,11 +1,17 @@
 package com.example.mdp;
 
+import com.example.mdp.client.OrderDtoMdpClient;
 import com.example.mdp.client.OrderMdpClient;
 import com.example.mdp.client.VipOrderMdpClient;
 import com.example.mdp.domain.OrderInfo;
+import com.example.mdp.dto.OrderDTO;
 import com.rocketmq.mdp.enhanced.enums.DelayLevel;
+import com.rocketmq.mdp.enhanced.idempotent.RedisIdempotentService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -23,6 +29,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
  * 5. 带标签消息场景：测试消息标签过滤
  * 6. 批量发送场景：测试高并发消息发送
  * 7. 灵活参数转换场景：测试不同包名的同名类自动转换
+ * 8. 幂等性保证场景：测试消息去重和并发处理
  * <p>
  * 架构设计原则:
  * - 一个 topic 对应一个消费者类，避免消息路由冲突
@@ -33,11 +40,34 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 @SpringBootTest(classes = MdpExampleApplication.class)
 public class MdpExampleTest {
 
+    private static final Logger logger = LoggerFactory.getLogger(MdpExampleTest.class);
+
     @Autowired
     private OrderMdpClient orderMdpClient;
 
     @Autowired
     private VipOrderMdpClient vipOrderMdpClient;
+
+    @Autowired
+    private OrderDtoMdpClient orderDtoMdpClient;
+
+    @Autowired(required = false)
+    private RedisIdempotentService redisIdempotentService;
+
+    /**
+     * 每个测试前清空 Redis 幂等性记录
+     * 确保测试独立性，避免测试数据污染
+     */
+    @BeforeEach
+    public void setup() {
+        if (redisIdempotentService != null) {
+            logger.info("======================================");
+            logger.info("清空 Redis 幂等性记录，确保测试环境干净");
+            redisIdempotentService.clearAll();
+            logger.info("Redis 清理完成");
+            logger.info("======================================");
+        }
+    }
 
     /**
      * 场景1: 测试同步发送普通订单消息
@@ -179,32 +209,53 @@ public class MdpExampleTest {
     }
 
     /**
-     * 场景6: 测试灵活参数转换
+     * 场景6: 测试灵活参数转换（真实跨包测试）
      * <p>
      * 流程:
-     * 1. 客户端发送 OrderInfo 对象
-     * 2. 框架序列化为 JSON 并记录原始类名
-     * 3. 服务端接收消息，尝试反序列化为目标类型
-     * 4. 如果直接反序列化失败，使用 ParameterConverter 进行灵活转换
-     * 5. 支持不同包名的同名类自动转换
+     * 1. 客户端发送 OrderDTO 对象 (com.example.mdp.dto.OrderDTO)
+     * 2. 框架序列化为 JSON 并记录原始类名 "com.example.mdp.dto.OrderDTO"
+     * 3. 服务端方法参数是 OrderInfo (com.example.mdp.domain.OrderInfo)
+     * 4. 框架检测到类名不匹配，触发灵活转换
+     * 5. ParameterConverter 基于字段名自动映射转换
+     * 6. 服务端成功接收到转换后的 OrderInfo 对象
+     * <p>
+     * 验证点:
+     * - OrderDTO → OrderInfo 跨包转换成功
+     * - 所有字段正确映射（orderId, userId, productName, amount, status, createTime）
+     * - 日志显示 "✅ 成功将 OrderDTO 转换为 OrderInfo"
      * <p>
      * 注意:
-     * - 需要在 @MdpServer 中开启 flexibleConversion=true
-     * - 基于字段名和类型进行转换，字段名必须一致
-     * - 适用于微服务间模型定义不一致的场景
+     * - 需要在 @MdpServer 中开启 flexibleConversion=true（默认开启）
+     * - 字段名必须一致才能自动映射
+     * - 字段类型必须兼容（String→String, Double→Double等）
      */
     @Test
-    public void testFlexibleConversion() {
-        OrderInfo order = new OrderInfo(
-                "ORDER005",
-                "USER005",
-                "测试灵活转换",
-                100.00
+    public void testFlexibleConversion() throws InterruptedException {
+        // 创建 DTO 对象（注意：不是 OrderInfo！）
+        OrderDTO orderDTO = new OrderDTO(
+                "ORDER_FLEX_001",
+                "USER_FLEX",
+                "跨包转换测试商品",
+                12345.67
         );
 
-        System.out.println("测试灵活参数转换: " + order);
-        orderMdpClient.sendOrderAsync(order);
-        System.out.println("消息已发送，框架会自动处理不同包名的参数转换");
+        System.out.println("=== 测试灵活参数转换（跨包） ===");
+        System.out.println("发送对象类型: " + orderDTO.getClass().getName());
+        System.out.println("接收对象类型: com.example.mdp.domain.OrderInfo");
+        System.out.println("发送内容: " + orderDTO);
+        System.out.println();
+
+        // 同步发送 DTO
+        orderDtoMdpClient.sendOrderFromDto(orderDTO);
+        Thread.sleep(500);
+
+        // 异步发送 DTO
+        orderDtoMdpClient.sendOrderFromDtoAsync(orderDTO);
+        Thread.sleep(500);
+
+        System.out.println();
+        System.out.println("预期结果: 日志显示 '✅ 成功将 OrderDTO 转换为 OrderInfo'");
+        System.out.println("=== 跨包转换测试完成 ===");
     }
 
     /**
@@ -391,5 +442,77 @@ public class MdpExampleTest {
 
         System.out.println("预期结果: 日志中有10次 '订单处理成功'，每条消息都被处理");
         System.out.println("=== 不同订单消费测试完成 ===");
+    }
+
+    /**
+     * 场景12: 综合测试 - 一次性验证所有功能
+     * <p>
+     * 测试内容:
+     * 1. 同步/异步/延迟消息
+     * 2. VIP订单
+     * 3. 幂等性去重
+     * 4. 跨包参数转换
+     * 5. 批量发送
+     * <p>
+     * 这个测试可以用来快速验证所有功能是否正常
+     */
+    @Test
+    public void testComprehensive() throws InterruptedException {
+        logger.info("========================================");
+        logger.info("开始综合测试 - 验证所有功能");
+        logger.info("========================================");
+
+        // 1. 同步消息
+        logger.info("\n[1/6] 测试同步消息");
+        OrderInfo syncOrder = new OrderInfo("COMP_SYNC_001", "USER_COMP", "同步测试", 100.0);
+        orderMdpClient.sendOrder(syncOrder);
+        Thread.sleep(500);
+
+        // 2. 异步消息
+        logger.info("\n[2/6] 测试异步消息");
+        OrderInfo asyncOrder = new OrderInfo("COMP_ASYNC_001", "USER_COMP", "异步测试", 200.0);
+        orderMdpClient.sendOrderAsync(asyncOrder);
+        Thread.sleep(500);
+
+        // 3. 延迟消息
+        logger.info("\n[3/6] 测试延迟消息（5秒延迟）");
+        OrderInfo delayedOrder = new OrderInfo("COMP_DELAY_001", "USER_COMP", "延迟测试", 300.0);
+        orderMdpClient.sendOrderDelayed(delayedOrder, DelayLevel.SECONDS_5);
+
+        // 4. VIP订单
+        logger.info("\n[4/6] 测试VIP订单");
+        OrderInfo vipOrder = new OrderInfo("COMP_VIP_001", "VIP_USER_COMP", "VIP测试", 9999.0);
+        vipOrderMdpClient.sendOrder(vipOrder);
+        Thread.sleep(500);
+
+        // 5. 跨包参数转换
+        logger.info("\n[5/6] 测试跨包参数转换");
+        OrderDTO dtoOrder = new OrderDTO("COMP_DTO_001", "USER_COMP", "DTO转换测试", 500.0);
+        orderDtoMdpClient.sendOrderFromDto(dtoOrder);
+        Thread.sleep(500);
+
+        // 6. 幂等性测试（发送2次相同订单）
+        logger.info("\n[6/6] 测试幂等性去重");
+        OrderInfo idempotentOrder = new OrderInfo("COMP_IDEM_001", "USER_COMP", "幂等性测试", 666.0);
+        orderMdpClient.sendOrder(idempotentOrder);
+        Thread.sleep(500);
+        logger.info("发送重复订单（应该被去重）");
+        orderMdpClient.sendOrder(idempotentOrder);
+        Thread.sleep(500);
+
+        // 等待延迟消息
+        logger.info("\n等待延迟消息到达...");
+        Thread.sleep(5000);
+
+        logger.info("\n========================================");
+        logger.info("综合测试完成");
+        logger.info("========================================");
+        logger.info("\n预期结果:");
+        logger.info("  ✅ 1条同步消息成功");
+        logger.info("  ✅ 1条异步消息成功");
+        logger.info("  ✅ 1条延迟消息成功（5秒后）");
+        logger.info("  ✅ 1条VIP订单成功（带VIP特权）");
+        logger.info("  ✅ 1条DTO转换消息成功（显示转换成功）");
+        logger.info("  ✅ 1条幂等性消息成功，1条被去重跳过");
     }
 }
