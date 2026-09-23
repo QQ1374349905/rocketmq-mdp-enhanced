@@ -27,10 +27,10 @@ public interface VipOrderMdpClient {
     void sendOrderAsync(OrderInfo order);
 
     /**
-     * 发送延迟VIP订单消息
+     * 发送延迟VIP订单消息（延迟10秒）
      */
-    @MdpMethod(isSync = false, supportDelay = true)
-    void sendOrderDelayed(OrderInfo order, DelayLevel delayLevel);
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.SECONDS_10)
+    void sendOrderDelayed(OrderInfo order);
 
     /**
      * 发送VIP订单消息（带标签）

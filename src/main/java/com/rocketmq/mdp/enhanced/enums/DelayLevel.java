@@ -7,6 +7,9 @@ package com.rocketmq.mdp.enhanced.enums;
  */
 public enum DelayLevel {
 
+    /** 不延迟 */
+    NONE(0, "不延迟"),
+
     /** 1秒 */
     SECONDS_1(1, "1s"),
 

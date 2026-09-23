@@ -101,26 +101,17 @@ public class MdpInterfaceGenerator {
             }
 
             boolean isSync = methodAnnotation.isSync();
-            boolean supportDelay = methodAnnotation.supportDelay();
+            DelayLevel delayLevelEnum = methodAnnotation.delayLevel();
             String tags = methodAnnotation.tags();
 
             // 提取参数
             Object messageBody = null;
-            int delayLevel = 0;
-
             if (args != null && args.length > 0) {
                 messageBody = args[0];
-
-                // 如果支持延迟，最后一个参数是延迟级别（支持DelayLevel枚举或int）
-                if (supportDelay && args.length > 1) {
-                    Object lastArg = args[args.length - 1];
-                    if (lastArg instanceof DelayLevel) {
-                        delayLevel = ((DelayLevel) lastArg).getLevel();
-                    } else if (lastArg instanceof Integer) {
-                        delayLevel = (Integer) lastArg;
-                    }
-                }
             }
+
+            // 从注解获取延迟级别
+            int delayLevel = delayLevelEnum.getLevel();
 
             // 发送消息（传入方法名）
             return sendMessage(method.getName(), messageBody, tags, delayLevel, isSync);

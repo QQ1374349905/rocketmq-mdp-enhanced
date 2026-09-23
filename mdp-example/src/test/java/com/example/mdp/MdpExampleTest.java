@@ -128,7 +128,7 @@ public class MdpExampleTest {
      * <p>
      * 流程:
      * 1. 客户端调用 OrderMdpClient.sendOrderDelayed()
-     * 2. 指定延迟级别 DelayLevel.SECONDS_10
+     * 2. 延迟级别在 @MdpMethod 注解中配置（DelayLevel.SECONDS_10）
      * 3. 消息发送到 topic: order_service，设置延迟级别
      * 4. RocketMQ 延迟投递，10秒后才会被消费
      * 5. OrderMdpServer 根据 methodName 路由到 sendOrderDelayed() 方法
@@ -144,10 +144,9 @@ public class MdpExampleTest {
                 1999.00
         );
 
-        DelayLevel delayLevel = DelayLevel.SECONDS_10;
-        System.out.println("发送延迟订单消息 (" + delayLevel.getDescription() + "): " + order);
-        orderMdpClient.sendOrderDelayed(order, delayLevel);
-        System.out.println("延迟消息已提交，将在" + delayLevel.getDescription() + "后被消费");
+        System.out.println("发送延迟订单消息（延迟10秒）: " + order);
+        orderMdpClient.sendOrderDelayed(order);
+        System.out.println("延迟消息已提交，将在10秒后被消费");
     }
 
     /**
@@ -475,9 +474,9 @@ public class MdpExampleTest {
         Thread.sleep(500);
 
         // 3. 延迟消息
-        logger.info("\n[3/6] 测试延迟消息（5秒延迟）");
+        logger.info("\n[3/6] 测试延迟消息（10秒延迟）");
         OrderInfo delayedOrder = new OrderInfo("COMP_DELAY_001", "USER_COMP", "延迟测试", 300.0);
-        orderMdpClient.sendOrderDelayed(delayedOrder, DelayLevel.SECONDS_5);
+        orderMdpClient.sendOrderDelayed(delayedOrder);
 
         // 4. VIP订单
         logger.info("\n[4/6] 测试VIP订单");

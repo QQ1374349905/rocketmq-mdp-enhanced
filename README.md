@@ -72,8 +72,8 @@ public interface OrderMdpClient {
     @MdpMethod(isSync = false)
     void sendOrder(OrderInfo order);
     
-    @MdpMethod(isSync = false, supportDelay = true)
-    void sendOrderDelayed(OrderInfo order, DelayLevel delayLevel);
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.MINUTES_10)
+    void sendOrderDelayed(OrderInfo order);
 }
 
 // 2. 直接使用
@@ -89,8 +89,8 @@ public class OrderService {
     }
     
     public void createDelayedOrder(OrderInfo order) {
-        // 类型安全的延迟级别，见名知意
-        orderMdpClient.sendOrderDelayed(order, DelayLevel.DELAY_10M);
+        // 延迟10分钟发送
+        orderMdpClient.sendOrderDelayed(order);
     }
 }
 ```
@@ -266,12 +266,11 @@ public interface OrderMdpClient {
     void sendOrderAsync(OrderInfo order);
 
     /**
-     * 发送延迟订单消息
+     * 发送延迟订单消息（延迟10秒）
      * @param order 订单信息
-     * @param delayLevel 延迟级别
      */
-    @MdpMethod(isSync = false, supportDelay = true)
-    void sendOrderDelayed(OrderInfo order, DelayLevel delayLevel);
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.SECONDS_10)
+    void sendOrderDelayed(OrderInfo order);
 
     /**
      * 发送带标签的 VIP 订单消息
@@ -431,14 +430,20 @@ public class OrderMdpServer { }
 @MdpClient(service = "order.service")
 public interface OrderMdpClient {
     
-    @MdpMethod(isSync = false, supportDelay = true)
-    void sendOrderDelayed(OrderInfo order, DelayLevel delayLevel);
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.SECONDS_30)
+    void sendOrderDelayed30s(OrderInfo order);
+    
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.MINUTES_10)
+    void sendOrderDelayed10m(OrderInfo order);
+    
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.HOURS_1)
+    void sendOrderDelayed1h(OrderInfo order);
 }
 
 // 使用
-orderMdpClient.sendOrderDelayed(order, DelayLevel.DELAY_30S);  // 30秒后处理
-orderMdpClient.sendOrderDelayed(order, DelayLevel.DELAY_10M);  // 10分钟后处理
-orderMdpClient.sendOrderDelayed(order, DelayLevel.DELAY_1H);   // 1小时后处理
+orderMdpClient.sendOrderDelayed30s(order);  // 30秒后处理
+orderMdpClient.sendOrderDelayed10m(order);  // 10分钟后处理
+orderMdpClient.sendOrderDelayed1h(order);   // 1小时后处理
 ```
 
 ### 3. 消息幂等性保证
@@ -721,9 +726,9 @@ rocketmq-mdp-enhanced/
 ### Q: 延迟消息不生效？
 
 **A**:
-1. 确认 `@MdpMethod` 注解设置了 `supportDelay = true`
+1. 确认 `@MdpMethod` 注解设置了正确的 `delayLevel` 参数
 2. 确认 RocketMQ Broker 启用了延迟消息功能
-3. 检查是否传入了正确的 `DelayLevel` 参数
+3. 检查延迟级别是否在 1-18 范围内
 
 ## 构建项目
 

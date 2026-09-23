@@ -1,5 +1,7 @@
 package com.rocketmq.mdp.enhanced.annotation;
 
+import com.rocketmq.mdp.enhanced.enums.DelayLevel;
+
 import java.lang.annotation.*;
 
 /**
@@ -12,8 +14,8 @@ import java.lang.annotation.*;
  *
  * @MdpMethod(isSync = false)
  * void onMessage(OrderInfo order);
- * @MdpMethod(isSync = false, supportDelay = true)
- * void onMessageDelayed(OrderInfo order, int delayLevel);
+ * @MdpMethod(isSync = false, delayLevel = DelayLevel.SECONDS_10)
+ * void onMessageDelayed(OrderInfo order);
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
@@ -28,10 +30,10 @@ public @interface MdpMethod {
     boolean isSync() default true;
 
     /**
-     * 是否支持延迟消息
-     * 如果为 true，方法需要额外的 int delayLevel 参数
+     * 延迟级别
+     * 默认 NONE（不延迟）
      */
-    boolean supportDelay() default false;
+    DelayLevel delayLevel() default DelayLevel.NONE;
 
     /**
      * 消息标签（tags）

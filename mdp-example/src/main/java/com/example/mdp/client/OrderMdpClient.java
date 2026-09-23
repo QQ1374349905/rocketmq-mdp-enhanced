@@ -29,12 +29,11 @@ public interface OrderMdpClient {
     void sendOrderAsync(OrderInfo order);
 
     /**
-     * 发送延迟订单消息
-     * supportDelay=true 表示支持延迟消息
-     * 使用 DelayLevel 枚举指定延迟时间
+     * 发送延迟订单消息（延迟10秒）
+     * delayLevel 指定延迟级别
      */
-    @MdpMethod(isSync = false, supportDelay = true)
-    void sendOrderDelayed(OrderInfo order, DelayLevel delayLevel);
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.SECONDS_10)
+    void sendOrderDelayed(OrderInfo order);
 
     /**
      * 带标签的消息发送

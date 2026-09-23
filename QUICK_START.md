@@ -50,8 +50,8 @@ public interface MyServiceClient {
     @MdpMethod(isSync = false)
     void sendMessage(MyData data);
 
-    @MdpMethod(isSync = false, supportDelay = true)
-    void sendDelayedMessage(MyData data, DelayLevel delayLevel);
+    @MdpMethod(isSync = false, delayLevel = DelayLevel.MINUTES_1)
+    void sendDelayedMessage(MyData data);
 }
 ```
 
@@ -72,7 +72,7 @@ public class MyService {
     }
     
     public void sendDelayedMessage(MyData data) {
-        client.sendDelayedMessage(data, DelayLevel.DELAY_1M);  // 1分钟后发送
+        client.sendDelayedMessage(data);  // 1分钟后发送
     }
 }
 ```
